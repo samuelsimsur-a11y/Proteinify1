@@ -1,21 +1,19 @@
-# dependencies
-node_modules
-.pnp
-.pnp.js
-
-# next
-.next
-out
-
-# env (keep env.example committed)
+# Never commit: dependencies and environment secrets
+node_modules/
 .env
+
+# Next.js
+.next/
+out/
+
+# Local env overrides (keep .env.example in git)
 .env*.local
 
-# debug / os
+# Debug / OS
 .DS_Store
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# typescript
+# TypeScript
 *.tsbuildinfo
