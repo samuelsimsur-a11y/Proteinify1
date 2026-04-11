@@ -1,0 +1,355 @@
+# DIL — Dish Identity Library: Cursor Rules
+
+## What this codebase is
+
+This is a **Culinary Grammar Engine**. It enforces cultural and physical cooking rules
+on LLM-generated recipe modifications. The pipeline is:
+
+```
+user input → getDishByIdOrAlias() → buildAPIPayload() → Anthropic API (tool_use forced)
+→ extractSwapsFromResponse() → validateSwap() → expansion
+```
+
+All files live in `src/lib/culinary/dil/`. Never import from internal modules directly —
+always import from `index.ts`.
+
+---
+
+## File responsibilities
+
+| File | Job | Touch when |
+|------|-----|-----------|
+| `schemas.ts` | Zod types — single source of truth | Adding a new field to any entity |
+| `loader.ts` | Parse JSON, build indexes, integrity check | Never, unless adding a new data file |
+| `promptBuilder.ts` | Build system prompt + Anthropic tool definition | Changing how constraints are communicated to the LLM |
+| `validator.ts` | Run guards against proposed swap codes | Adding new violation logic |
+| `data/dishDNA.json` | Dish entries | Adding or editing a dish |
+| `data/swapGuards.json` | Guard rules | Adding or editing a guard |
+| `tests/golden-regression.json` | Known failure cases | Every time a dish or guard is added |
+
+---
+
+## Rules for adding a new dish to dishDNA.json
+
+Every dish entry MUST have all of these fields. Do not omit any.
+
+### cookingArcs — ALWAYS multi-track, never a flat array
+
+```json
+"cookingArcs": [
+  {
+    "track": "protein",
+    "sequence": ["saute", "braise"],
+    "mergeAt": "plating"
+  },
+  {
+    "track": "assembly",
+    "sequence": ["simmerstew"]
+  }
+]
+```
+
+- Each distinct preparation thread is its own track
+- `mergeAt` names the convergence point when two tracks combine
+- `identityMethod` must appear in at least one track's `sequence` — `validateDILIntegrity()` will throw if not
+
+### fatVehicle — ALWAYS an array of stage-aware entries
+
+```json
+"fatVehicle": [
+  { "name": "olive oil", "thermalPoint": "high", "stage": "saute", "role": "frying-medium" },
+  { "name": "olive oil", "thermalPoint": "neutral", "stage": "finish", "role": "aromatic-finish" }
+]
+```
+
+- Never a single object `{ "name": "...", "thermalPoint": "..." }` — that was v2, it's gone
+- The same fat can appear multiple times with different stages and roles
+
+### acidAnchor — always include stage + role + pHApprox
+
+```json
+"acidAnchor": [
+  {
+    "ingredient": "lime juice",
+    "stage": "at-table",
+    "role": "brightness",
+    "pHApprox": 2.4,
+    "concentrationPct": 5,
+    "proteinEffect": "brightens"
+  }
+]
+```
+
+- `stage` is load-bearing: "pre-cook" acid tenderises protein; "at-table" acid is brightness only
+- `concentrationPct` and `contactTimeMinutes` are optional but include them when known
+
+### textureContrast — ALWAYS component-mapped, never a tuple
+
+```json
+"textureContrast": {
+  "primary": { "component": "noodle", "texture": "silky" },
+  "secondary": { "component": "protein", "texture": "tender" }
+}
+```
+
+- Never `"textureContrast": ["silky", "tender"]` — that was v2
+- Both `primary.texture` and `secondary.texture` must appear in `textureProfile`
+
+### physicsConstraints — always all three flags
+
+```json
+"physicsConstraints": {
+  "moistureSensitive": true,
+  "heatTransferCritical": false,
+  "acidTimingSensitive": true
+}
+```
+
+- `moistureSensitive: true` + a guard with `freeWaterReleaseRisk: "critical"` = automatic physicsviolation
+- Never fake a number here — these are boolean facts about the dish's cooking physics
+
+### historicallyAbsent — always include confidence
+
+```json
+"historicallyAbsent": [
+  {
+    "item": "cream sauce",
+    "confidence": "definitive",
+    "note": "Optional: explain why if contested"
+  }
+]
+```
+
+- `confidence` must be `"definitive"`, `"contested"`, or `"regional"`
+- Only `"definitive"` items are used in hard guard checks
+
+### dishAliases — always include common misspellings and natural language variants
+
+```json
+"dishAliases": [
+  "pad thai noodles",
+  "pad thai with chicken",
+  "pad-thai",
+  "padthai"
+]
+```
+
+- These feed `getDishByIdOrAlias()` — if the alias isn't here, users won't get a match
+- Must be lowercase
+
+### schemaVersion
+
+```json
+"schemaVersion": "2026-04-01"
+```
+
+- Always today's date in YYYY-MM-DD format when creating or editing an entry
+- This is a string, not a number
+
+---
+
+## Rules for adding a new guard to swapGuards.json
+
+### Never hardcode which dishes a guard applies to in promptBuilder.ts
+
+The prompt builder derives guard codes from the indexes in `loader.ts` automatically.
+If you add a guard with `"bannedDishes": ["new-dish"]`, it will appear in the prompt
+for that dish without any change to `promptBuilder.ts`.
+
+### Always include ingredientPhysics when the ingredient has moisture implications
+
+```json
+"ingredientPhysics": {
+  "freeWaterReleaseRisk": "critical",
+  "textureBehaviorUnderHeat": "mashes"
+}
+```
+
+- `"critical"` = auto physicsviolation in any `moistureSensitive` dish regardless of other constraints
+- `"high"` = blocker above 15% quantity, warning below
+- Omit `ingredientPhysics` entirely (or set null) for non-physics guards
+
+### Always include alternativesByGoal for every goal
+
+```json
+"alternativesByGoal": {
+  "protein-boost": ["..."],
+  "vegan": ["..."],
+  "lower-calorie": ["..."],
+  "lower-fat": ["..."],
+  "cultural-coherence": ["..."],
+  "general": ["..."]
+}
+```
+
+- `"general"` is the fallback when no goal is detected
+- Do not leave any goal key empty — if you genuinely have nothing, copy the general entry
+
+### Set allowOverride correctly
+
+- `"allowOverride": false` — blocker-level violations the user cannot bypass
+- `"allowOverride": true` — warning-level violations where informed user choice is valid
+
+### Set quantityThreshold when the swap is proportional
+
+```json
+"quantityThreshold": {
+  "blockerAbovePct": 15,
+  "warningAbovePct": 5
+}
+```
+
+- Omit entirely for binary bans (cultural zone violations, vegan identity violations)
+- Include for ingredient additions where a small amount might be acceptable
+
+---
+
+## Rules for the validator
+
+### Never use (dish as any)[key]
+
+`mustNotHave` and `mustHave` in guard constraints only accept `DishDNABooleanKey` values:
+`"isTraditionallyVegan"`, `"hasMarinade"`, `"dairyPresent"`. That enum is enforced in
+`schemas.ts`. Do not add other field names to those arrays.
+
+### Physics violations come from the physics pass, not guard lists
+
+Do not add `"violationIfBroken": "physicsviolation"` to a guard and rely on
+`bannedDishes` to fire it. Instead, set `ingredientPhysics.freeWaterReleaseRisk`
+on the guard and `physicsConstraints.moistureSensitive: true` on the dish.
+The physics pass in `validator.ts` handles it automatically.
+
+---
+
+## Rules for the prompt builder
+
+### Never hardcode guard codes
+
+```ts
+// ❌ Wrong — breaks every time a new guard is added
+const codes = ["soya-chunks-addition", "cauliflower-rice-swap"];
+
+// ✅ Correct — always current
+const codes = getGuardsForDish(dish).map(g => g.code);
+```
+
+### Always use the tool_use API, never raw JSON instructions
+
+```ts
+// ❌ Wrong — LLM can ignore this
+"You MUST respond with JSON only: { appliedSwaps: [...] }"
+
+// ✅ Correct — API enforces the schema structurally
+tools: [buildToolDefinition(dish)],
+tool_choice: { type: "tool", name: "apply_swap_codes" }
+```
+
+---
+
+## Rules for tests
+
+Every new dish or guard requires at minimum:
+1. One test case that FAILS validation (a known bad swap)
+2. One test case that PASSES validation (a valid empty or acceptable swap)
+
+Add them to `tests/golden-regression.json`. The test runner in
+`tests/validateSwap.test.ts` reads that file automatically — no code changes needed.
+
+---
+
+## What NOT to do — common mistakes Cursor should avoid
+
+### Do not invent physics numbers
+
+```json
+// ❌ This was v2 — waterActivityDelta is not a real measurement in this context
+"waterActivityDelta": 0.3
+
+// ✅ Use physicsConstraints booleans instead
+"physicsConstraints": { "moistureSensitive": true, ... }
+```
+
+### Do not use a flat cookingArc array
+
+```json
+// ❌ v2 — hides parallel preparation tracks
+"cookingArc": ["saute", "braise", "dumsteam"]
+
+// ✅ v3 — multi-track
+"cookingArcs": [{ "track": "protein", "sequence": [...] }, ...]
+```
+
+### Do not use a tuple for textureContrast
+
+```json
+// ❌ v2 — loses which component has which texture
+"textureContrast": ["granular", "tender"]
+
+// ✅ v3 — component-mapped
+"textureContrast": { "primary": { "component": "rice", "texture": "granular" }, ... }
+```
+
+### Do not use z.literal() for schemaVersion
+
+```ts
+// ❌ Breaks Zod validation on any day you update the schema
+schemaVersion: z.literal("2026-04-01")
+
+// ✅ Regex-validated string
+schemaVersion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+```
+
+### Do not put logic in the notes field
+
+```json
+// ❌ Logic buried in free text — invisible to the engine
+"notes": "Do not add eggs because this is vegan"
+
+// ✅ Logic in a guard with bannedDishes + mustNotHave
+```
+
+### Do not add a new cuisine zone as a string to neverFromOtherZones
+
+```json
+// ❌ v2 — free strings are unmatchable
+"neverFromOtherZones": ["cream-cheese sauce logic as default"]
+
+// ✅ v3 — reference guard codes
+"neverGuardCodes": ["foreign-cheese-enrichment", "paneer-addition"]
+```
+
+---
+
+## Integrity check
+
+`validateDILIntegrity()` runs at server startup and throws on:
+- `identityMethod` not present in any `cookingArc` sequence
+- `textureContrast` textures not in `textureProfile`
+- `hasMarinade: true` with no `pre-cook` acid stage
+- Guard `bannedDishes` referencing a dish ID that doesn't exist
+- Invalid `schemaVersion` format
+
+If the server won't start, run `validateDILIntegrity()` directly and read the error output.
+
+---
+
+## Current dish coverage (Sprint 0)
+
+- `biryani` — fully furnished, all physics wired
+
+Sprint 1 targets (add in this order — failure-rate ordered, not prestige-ordered):
+1. `jerk-chicken`
+2. `pho-bo`
+3. `pad-thai`
+4. `falafel`
+5. `ramen`
+6. `ceviche`
+7. `tacos`
+8. `curry` (disambiguation required — will need subtype handling)
+
+---
+
+## Proteinify app (outside DIL)
+
+- **Change history & version IDs** for the UI and recipe-generation workstream: `docs/EVOLUTION.md`  
+- When making a **notable** Proteinify change (cards, prompts, API), append to the ledger and bump the version ID per the rules in that file.

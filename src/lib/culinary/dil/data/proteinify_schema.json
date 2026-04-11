@@ -1,0 +1,221 @@
+{
+  "name": "proteinify_compact_result",
+  "strict": true,
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["dish", "tagline", "dilDishId", "servings", "sharedRecipe", "versions"],
+    "properties": {
+      "dish": {
+        "type": "string"
+      },
+      "tagline": {
+        "type": "string",
+        "description": "One sentence describing the transformation strategy"
+      },
+      "dilDishId": {
+        "type": ["string", "null"]
+      },
+      "servings": {
+        "type": "number",
+        "description": "Number of servings all ingredient amounts are scaled to"
+      },
+      "sharedRecipe": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["originalProteinG", "ingredients", "instructions"],
+        "description": "Single baseline recipe (before tier-specific protein tweaks). Full ingredients + full steps.",
+        "properties": {
+          "originalProteinG": {
+            "type": "number",
+            "description": "Total protein per serving from this baseline; ingredient proteinContributionG rows should sum to this (approx)."
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "amount", "proteinContributionG", "note"],
+              "properties": {
+                "name": { "type": "string" },
+                "amount": {
+                  "type": "string",
+                  "description": "Scaled to requested servings"
+                },
+                "proteinContributionG": {
+                  "type": "number",
+                  "description": "Grams protein from this line per serving toward originalProteinG"
+                },
+                "note": {
+                  "type": "string",
+                  "description": "Recipe slot + role, e.g. protein anchor, starch structure, fat vehicle, broth, acid, aromatic, garnish"
+                }
+              }
+            }
+          },
+          "instructions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["step", "heatGuard", "textureNote"],
+              "properties": {
+                "step": { "type": "string" },
+                "heatGuard": { "type": ["string", "null"] },
+                "textureNote": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      },
+      "versions": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 3,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "summary",
+            "proteinDeltaG",
+            "totalProteinG",
+            "appliedSwapCodes",
+            "swapSummary",
+            "transformationByComponent",
+            "methodAdjustments",
+            "ingredientChanges",
+            "instructionChanges",
+            "mealPrepNote"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "enum": ["Close Match", "Balanced", "Full Send"]
+            },
+            "summary": {
+              "type": "string",
+              "description": "One sentence: trade-offs for this tier vs baseline"
+            },
+            "proteinDeltaG": {
+              "type": "number",
+              "description": "Added protein per serving vs sharedRecipe baseline"
+            },
+            "totalProteinG": {
+              "type": "number",
+              "description": "sharedRecipe.originalProteinG + proteinDeltaG"
+            },
+            "appliedSwapCodes": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "swapSummary": {
+              "type": "array",
+              "maxItems": 4,
+              "items": { "type": "string" }
+            },
+            "transformationByComponent": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Human-facing component map for UI — short clauses per slot (not full ingredients). Use empty arrays only when truly unchanged.",
+              "required": ["protein", "carbBase", "sauceBroth", "fat", "toppings"],
+              "properties": {
+                "protein": {
+                  "type": "array",
+                  "maxItems": 4,
+                  "items": { "type": "string" }
+                },
+                "carbBase": {
+                  "type": "array",
+                  "maxItems": 4,
+                  "items": { "type": "string" }
+                },
+                "sauceBroth": {
+                  "type": "array",
+                  "maxItems": 4,
+                  "items": { "type": "string" }
+                },
+                "fat": {
+                  "type": "array",
+                  "maxItems": 4,
+                  "items": { "type": "string" }
+                },
+                "toppings": {
+                  "type": "array",
+                  "maxItems": 4,
+                  "items": { "type": "string" }
+                }
+              }
+            },
+            "methodAdjustments": {
+              "type": "array",
+              "description": "Short modification-first bullets: how to apply this tier on top of the baseline method. No full recipe repeat.",
+              "minItems": 2,
+              "maxItems": 8,
+              "items": { "type": "string" }
+            },
+            "ingredientChanges": {
+              "type": "array",
+              "description": "Only changes vs sharedRecipe — adds or replaces. Empty array if tier needs no ingredient edits.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "action",
+                  "targetSubstring",
+                  "name",
+                  "amount",
+                  "proteinContributionG",
+                  "note"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["add", "replace"],
+                    "description": "add = new line; replace = find shared ingredient whose name contains targetSubstring"
+                  },
+                  "targetSubstring": {
+                    "type": ["string", "null"],
+                    "description": "Non-null for replace: substring of shared ingredient name. Null for add."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Ingredient name after change (or new ingredient)"
+                  },
+                  "amount": {
+                    "type": "string"
+                  },
+                  "proteinContributionG": {
+                    "type": "number",
+                    "description": "Grams protein this line contributes per serving in the MERGED list (for replace: new line total; for add: contribution of add-on)"
+                  },
+                  "note": {
+                    "type": "string",
+                    "description": "Slot touched + macro intent (protein up, leaner fat, smarter starch) and brief mechanism if non-obvious"
+                  }
+                }
+              }
+            },
+            "instructionChanges": {
+              "type": "array",
+              "description": "Steps appended after sharedRecipe instructions for this tier (protein-specific finishing, swaps). Can be empty only for truly identical method.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["step", "heatGuard", "textureNote"],
+                "properties": {
+                  "step": { "type": "string" },
+                  "heatGuard": { "type": ["string", "null"] },
+                  "textureNote": { "type": ["string", "null"] }
+                }
+              }
+            },
+            "mealPrepNote": {
+              "type": ["string", "null"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

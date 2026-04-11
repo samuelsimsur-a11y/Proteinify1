@@ -1,0 +1,149 @@
+/* Fontshare (per brand spec) */
+@import url("https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&display=swap");
+@import url("https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap");
+
+@import "tailwindcss";
+
+@theme {
+  --shadow-soft: 0 10px 30px rgb(0 0 0 / 0.08);
+}
+
+:root {
+  color-scheme: light;
+
+  /* Brand colors (light) */
+  --bg: #fdafa5; /* fallback, overwritten below */
+  --bg: #FDFAF5; /* warm cream */
+  --surface: #FAF7F2;
+  --surface-card: #FAF7F2;
+  --surface-offset: #F5F1EA;
+  --divider: rgba(40, 25, 10, 0.1);
+
+  --text-primary: #1C1208;
+  --text-muted: #8A7A6A;
+  --text-faint: #C4B8A8;
+
+  --accent: #E8710A;
+  --accent-hover: #C45E08;
+  --accent-light: #FEF0E3;
+
+  --accent-forest: #1A5C38;
+  --accent-forest-light: #E3F2EB;
+
+  --accent-gold: #D4960A;
+  --accent-gold-light: #FEF7E3;
+
+  /* Derived UI */
+  --radius-pill: 50px;
+  --radius-card: 20px;
+
+  --shadow-card: 0 2px 12px rgba(60, 30, 5, 0.08);
+  --shadow-card-hover: 0 8px 28px rgba(60, 30, 5, 0.12);
+
+  --font-display: "Cabinet Grotesk", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+    Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-body: "Satoshi", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+html.dark {
+  color-scheme: dark;
+  --bg: #0F0C07;
+  --surface: #161208;
+  --surface-card: #161208;
+  --surface-offset: #1B1710;
+
+  --text-primary: #F0E8D8;
+  --text-muted: #B7AA93;
+  --text-faint: #867A6A;
+  --divider: rgba(240, 232, 216, 0.14);
+
+  /* Brightened accents (per spec) */
+  --accent: #F28A2A;
+  --accent-hover: #DE7A1F;
+  --accent-light: rgba(242, 138, 42, 0.12);
+
+  --accent-forest: #4A9E6E;
+  --accent-forest-light: rgba(74, 158, 110, 0.16);
+
+  --accent-gold: #E0B035;
+  --accent-gold-light: rgba(224, 176, 53, 0.16);
+
+  --shadow-card: 0 2px 18px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* Base + defaults */
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+* {
+  border-color: var(--divider);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* Utility typography hooks */
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+/* Result card elevation */
+.pf-card {
+  background: var(--surface-card);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pf-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+/* Skeleton shimmer (loading state) */
+@keyframes pf-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.pf-skeleton {
+  background: linear-gradient(90deg, #F5F1EA 0%, #EDE8DE 50%, #F5F1EA 100%);
+  background-size: 200% 100%;
+  animation: pf-shimmer 1.4s ease-in-out infinite;
+}
+
+.pf-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(232, 113, 10, 0.25);
+  border-top-color: var(--accent);
+  animation: pf-spin 0.9s linear infinite;
+}
+
+@keyframes pf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+

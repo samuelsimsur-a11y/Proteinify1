@@ -1,0 +1,157 @@
+[
+  {
+    "id": "biryani",
+    "displayName": "Biryani",
+    "cuisineZone": "southasian",
+
+    "cookingArcs": [
+      {
+        "track": "aromatics-and-protein",
+        "sequence": ["saute", "shallowfry", "braise"],
+        "mergeAt": "layering",
+        "notes": "saute = spice bloom in ghee; shallowfry = birista at 150-165C; braise = meat curry base"
+      },
+      {
+        "track": "rice",
+        "sequence": ["parboil"],
+        "mergeAt": "layering",
+        "notes": "Rice parboiled to ~70% doneness in salted water before layering. Separate track — often runs concurrently with protein track."
+      },
+      {
+        "track": "assembly",
+        "sequence": ["dumsteam"],
+        "notes": "Sealed-vessel steam finish; dum seal (dough or foil) is load-bearing"
+      }
+    ],
+
+    "identityMethod": "dumsteam",
+    "identityProtein": "lamb or chicken",
+
+    "fatVehicle": [
+      {
+        "name": "ghee",
+        "thermalPoint": "high",
+        "stage": "spice-bloom",
+        "role": "flavor-carrier"
+      },
+      {
+        "name": "ghee",
+        "thermalPoint": "high",
+        "stage": "birista-fry",
+        "role": "frying-medium"
+      },
+      {
+        "name": "ghee",
+        "thermalPoint": "neutral",
+        "stage": "dum-drizzle",
+        "role": "aromatic-finish"
+      }
+    ],
+
+    "acidAnchor": [
+      {
+        "ingredient": "yogurt",
+        "stage": "pre-cook",
+        "role": "tenderizer",
+        "pHApprox": 4.5,
+        "concentrationPct": 30,
+        "contactTimeMinutes": 120,
+        "proteinEffect": "denatures"
+      }
+    ],
+
+    "aromaticBase": [
+      "birista (fried onions — Maillard at 150-165C)",
+      "whole garam masala: cardamom, clove, cinnamon (bloomed in ghee first)",
+      "saffron / kewra water (added at dum layer)"
+    ],
+
+    "textureProfile": ["granular", "tender"],
+
+    "textureContrast": {
+      "primary": { "component": "rice", "texture": "granular" },
+      "secondary": { "component": "protein", "texture": "tender" }
+    },
+
+    "physicsConstraints": {
+      "moistureSensitive": true,
+      "heatTransferCritical": true,
+      "acidTimingSensitive": true
+    },
+
+    "isTraditionallyVegan": false,
+    "hasMarinade": true,
+    "dairyPresent": true,
+    "transformationClass": "same-soul",
+
+    "keyNonnegotiables": [
+      "layered rice and protein structure — layers must remain distinct",
+      "aromatic whole spices bloomed in fat before any liquid",
+      "birista (slow-fried browned onions) — not caramelised, not raw",
+      "dum-style sealed-steam finish",
+      "identity protein remains in recognisable pieces"
+    ],
+
+    "structuralAnchors": [
+      "long-grain rice (basmati preferred — low starch leach)",
+      "dum seal (dough rope or foil — traps steam pressure)"
+    ],
+
+    "historicallyAbsent": [
+      {
+        "item": "soft-boiled jammy egg alongside",
+        "confidence": "definitive",
+        "note": "Anda (egg) biryani exists as its own dish. Adding a soft-boiled egg to meat biryani imports ramen logic."
+      },
+      {
+        "item": "textured soy chunks as core protein replacement",
+        "confidence": "definitive"
+      },
+      {
+        "item": "full cauliflower rice replacement",
+        "confidence": "definitive",
+        "note": "Cauliflower releases ~92% free water under dum pressure — destroys grain separation."
+      },
+      {
+        "item": "cream sauce or dairy-heavy enrichment post-cook",
+        "confidence": "regional",
+        "note": "Mughlai variants may use cream, but it enters before dum, not as a finish."
+      }
+    ],
+
+    "acceptedAdaptations": [
+      "increase original meat portion modestly (up to +30%)",
+      "add bone broth only as rice cooking liquid (not poured in post-layer)",
+      "konjac rice blend up to 30% — must be thoroughly drained before layering",
+      "paneer in paneer-forward variant — treat as separate dish logic, not swap"
+    ],
+
+    "confusionRisks": [
+      "pulao (cooked in one pot — no dum, no layering)",
+      "generic curry rice (sauce absorbed into rice — no identity separation)",
+      "tandoori logic (dry-rub grill — imports wrong fat, acid, and method grammar)"
+    ],
+
+    "servingContext": "Layered rice dish served as a complete centrepiece — lifted from pot with both layers visible",
+    "typicalServingSizeg": 400,
+    "typicalProteinPerServingg": 26,
+
+    "notes": "The dum (sealed steam pressure) is the defining physics. Any swap introducing excess free water collapses grain separation. Birista is not optional — it provides the Maillard-sweet backbone the whole dish is built on. The marinade acid timing is load-bearing: yogurt at 30% concentration for 2+ hours denatures actomyosin; rushing this or replacing it with post-cook acid produces a different texture.",
+
+    "dishAliases": [
+      "chicken biryani",
+      "lamb biryani",
+      "veg biryani",
+      "vegetable biryani",
+      "biryani rice",
+      "biriani",
+      "briyani",
+      "biryani with chicken",
+      "dum biryani",
+      "hyderabadi biryani",
+      "lucknowi biryani"
+    ],
+
+    "schemaVersion": "2026-04-01"
+  }
+]

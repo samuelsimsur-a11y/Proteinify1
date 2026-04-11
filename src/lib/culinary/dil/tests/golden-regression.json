@@ -1,0 +1,144 @@
+[
+  {
+    "description": "Classic biryani failure: both cauli rice swap and soy protein replacement",
+    "dishId": "biryani",
+    "swaps": [
+      { "code": "cauliflower-rice-swap", "quantity": "dominant" },
+      { "code": "soya-chunks-addition", "quantity": "dominant" }
+    ],
+    "options": { "userGoal": "lower-calorie" },
+    "expected": {
+      "isValid": false,
+      "violationCount": 2,
+      "blockedCodes": ["cauliflower-rice-swap", "soya-chunks-addition"],
+      "shouldSuggest": ["konjac rice blend up to 30%", "increase original meat portion by 20–30%"]
+    }
+  },
+  {
+    "description": "Biryani: cauliflower rice at trace quantity should still be a blocker (physicsviolation overrides quantity)",
+    "dishId": "biryani",
+    "swaps": [
+      { "code": "cauliflower-rice-swap", "quantity": "trace" }
+    ],
+    "options": {},
+    "expected": {
+      "isValid": false,
+      "violationCount": 1,
+      "blockedCodes": ["cauliflower-rice-swap"],
+      "violationType": "physicsviolation"
+    }
+  },
+  {
+    "description": "Biryani: soy chunks at trace quantity should be a warning not a blocker",
+    "dishId": "biryani",
+    "swaps": [
+      { "code": "soya-chunks-addition", "quantity": "trace" }
+    ],
+    "options": {},
+    "expected": {
+      "isValid": true,
+      "violationCount": 1,
+      "blockedCodes": [],
+      "warnedCodes": ["soya-chunks-addition"]
+    }
+  },
+  {
+    "description": "Biryani: soft-boiled egg alongside — warning level, override allowed",
+    "dishId": "biryani",
+    "swaps": [
+      { "code": "soft-boiled-egg-alongside" }
+    ],
+    "options": { "userGoal": "protein-boost" },
+    "expected": {
+      "isValid": true,
+      "violationCount": 1,
+      "severity": "warning",
+      "allowOverride": true,
+      "shouldSuggestGoalAlternative": true
+    }
+  },
+  {
+    "description": "Biryani: valid protein-boost swap — no violations",
+    "dishId": "biryani",
+    "swaps": [],
+    "options": { "userGoal": "protein-boost" },
+    "expected": {
+      "isValid": true,
+      "violationCount": 0,
+      "blockedCodes": []
+    }
+  },
+  {
+    "description": "Jerk chicken: yogurt marinade amplification — confusionviolation (imports tandoori logic)",
+    "dishId": "jerk-chicken",
+    "swaps": [
+      { "code": "yogurt-marinade-amplification" }
+    ],
+    "options": {},
+    "expected": {
+      "isValid": false,
+      "violationCount": 1,
+      "blockedCodes": ["yogurt-marinade-amplification"],
+      "violationType": "confusionviolation"
+    }
+  },
+  {
+    "description": "Jerk chicken: paneer addition — zoneviolation (paneer is not Caribbean grammar)",
+    "dishId": "jerk-chicken",
+    "swaps": [
+      { "code": "paneer-addition" }
+    ],
+    "options": {},
+    "expected": {
+      "isValid": false,
+      "violationCount": 1,
+      "blockedCodes": ["paneer-addition"],
+      "violationType": "zoneviolation"
+    }
+  },
+  {
+    "description": "Jerk chicken: bone broth addition — portabilityviolation (broth in grill method)",
+    "dishId": "jerk-chicken",
+    "swaps": [
+      { "code": "bone-broth-substitute" }
+    ],
+    "options": {},
+    "expected": {
+      "isValid": true,
+      "violationCount": 1,
+      "severity": "warning",
+      "warnedCodes": ["bone-broth-substitute"],
+      "allowOverride": true
+    }
+  },
+  {
+    "description": "Biryani: unregistered code from model hallucination — should warn, not silently pass",
+    "dishId": "biryani",
+    "swaps": [
+      { "code": "add-mozzarella-topping" }
+    ],
+    "options": {},
+    "expected": {
+      "isValid": true,
+      "violationCount": 1,
+      "severity": "warning",
+      "reason": "unregistered code"
+    }
+  },
+  {
+    "description": "Biryani: multiple valid swaps with vegan goal — goal alternatives should be vegan-specific",
+    "dishId": "biryani",
+    "swaps": [
+      { "code": "soya-chunks-addition", "quantity": "dominant" },
+      { "code": "soft-boiled-egg-alongside" }
+    ],
+    "options": { "userGoal": "vegan" },
+    "expected": {
+      "isValid": false,
+      "violationCount": 2,
+      "blockedCodes": ["soya-chunks-addition"],
+      "warnedCodes": ["soft-boiled-egg-alongside"],
+      "goalAlternativesShouldMentionVegan": true
+    }
+  }
+]

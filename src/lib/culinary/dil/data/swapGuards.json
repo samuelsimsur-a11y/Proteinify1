@@ -1,0 +1,238 @@
+[
+  {
+    "code": "cauliflower-rice-swap",
+    "constraints": {
+      "bannedDishes": ["biryani"]
+    },
+    "ingredientPhysics": {
+      "freeWaterReleaseRisk": "critical",
+      "textureBehaviorUnderHeat": "mashes"
+    },
+    "violationIfBroken": "physicsviolation",
+    "severity": "blocker",
+    "quantityThreshold": {
+      "blockerAbovePct": 5,
+      "warningAbovePct": 0
+    },
+    "reason": "Cauliflower releases free water under dum pressure, collapsing grain separation",
+    "educationalContext": "Dum cooking traps steam in a sealed vessel. Cauliflower at ~92% water content raises internal humidity past the starch gelatinisation threshold for long-grain rice. The result is wet, collapsed, indistinct grain — the structural opposite of biryani's granular/tender contrast.",
+    "safeAlternatives": [
+      "konjac rice blend up to 30% — must be thoroughly drained before layering",
+      "reduce portion size; increase aromatic density instead"
+    ],
+    "alternativesByGoal": {
+      "lower-calorie": [
+        "konjac rice blend up to 30% — drain thoroughly",
+        "reduce serving size; serve with high-volume low-calorie raita"
+      ],
+      "lower-fat": [
+        "reduce ghee in dum-drizzle stage (not frying stage)",
+        "use leaner protein cut (chicken breast instead of thigh)"
+      ],
+      "protein-boost": [
+        "increase meat portion by up to 30%",
+        "serve with protein-rich dal side"
+      ],
+      "vegan": [
+        "cauliflower as a side dish preserves its identity — don't sub it into rice",
+        "mushroom or paneer biryani is a separate valid dish — treat as new dish logic"
+      ],
+      "cultural-coherence": [
+        "serve cauliflower as a separate subzi side",
+        "use a smaller rice portion and larger protein portion"
+      ],
+      "general": [
+        "konjac rice blend up to 30%",
+        "reduce rice portion; serve with dal"
+      ]
+    },
+    "allowOverride": false
+  },
+
+  {
+    "code": "soya-chunks-addition",
+    "constraints": {
+      "bannedDishes": ["biryani"],
+      "bannedMethods": ["dumsteam"]
+    },
+    "ingredientPhysics": {
+      "freeWaterReleaseRisk": "high",
+      "textureBehaviorUnderHeat": "firms"
+    },
+    "violationIfBroken": "structuralviolation",
+    "severity": "blocker",
+    "quantityThreshold": {
+      "blockerAbovePct": 15,
+      "warningAbovePct": 5
+    },
+    "reason": "TVP / soy chunks destroy the layered rice texture and dum steam physics",
+    "educationalContext": "Biryani identity depends on protein pieces that hold their form under dum steam — lamb chunks, chicken pieces. Soy chunks absorb water aggressively, swell, and release it into the sealed vessel, raising steam humidity and collapsing grain separation. Their spongy texture also creates a visual identity mismatch when layers are lifted.",
+    "safeAlternatives": [
+      "increase original meat portion by 20–30%",
+      "add chana dal as a coherent legume side (not in the dum vessel)"
+    ],
+    "alternativesByGoal": {
+      "protein-boost": [
+        "increase lamb or chicken portion by 25–30%",
+        "marinate extra protein in the same yogurt base for consistency"
+      ],
+      "vegan": [
+        "mushroom biryani follows similar dum DNA — treat as a separate dish",
+        "jackfruit biryani is an accepted adaptation — lower moisture than soy chunks"
+      ],
+      "lower-calorie": [
+        "reduce meat portion; increase vegetable side dishes",
+        "use leaner protein (chicken breast)"
+      ],
+      "lower-fat": [
+        "reduce ghee quantity; use in spice-bloom stage only",
+        "switch to leaner protein cut"
+      ],
+      "cultural-coherence": [
+        "use keema (minced meat) as a recognised variation",
+        "use paneer only in a distinct paneer biryani — not as a swap"
+      ],
+      "general": [
+        "increase original meat portion",
+        "add chana dal as a side"
+      ]
+    },
+    "allowOverride": false
+  },
+
+  {
+    "code": "soft-boiled-egg-alongside",
+    "constraints": {
+      "bannedDishes": ["biryani", "jerk-chicken", "pad-thai", "pho-bo"]
+    },
+    "ingredientPhysics": null,
+    "violationIfBroken": "dietaryviolation",
+    "severity": "warning",
+    "reason": "Soft-boiled egg is not part of classic meat biryani identity — it imports ramen logic",
+    "educationalContext": "Anda (egg) biryani exists as its own distinct preparation. A soft-boiled jammy egg placed on top of meat biryani is a presentation borrowed from Japanese ramen culture. It is not a coherent addition in South Asian culinary grammar — eggs belong in the braise layer of egg-forward biryani variants, not as a garnish.",
+    "safeAlternatives": [
+      "make anda biryani as a separate dish if eggs are desired",
+      "add hard-boiled egg to the braise layer only in egg-forward variants"
+    ],
+    "alternativesByGoal": {
+      "protein-boost": [
+        "increase meat portion by 25%",
+        "serve with a protein-rich dal makhani or chana masala side"
+      ],
+      "vegan": [
+        "egg conflicts with vegan goal — use mushroom or vegetable biryani variant"
+      ],
+      "lower-calorie": [
+        "reduce ghee; serve with low-fat raita"
+      ],
+      "lower-fat": [
+        "reduce ghee quantity in dum-drizzle stage"
+      ],
+      "cultural-coherence": [
+        "anda biryani is the culturally coherent egg variant — make that instead"
+      ],
+      "general": [
+        "increase meat portion",
+        "serve with raita"
+      ]
+    },
+    "allowOverride": true
+  },
+
+  {
+    "code": "paneer-addition",
+    "constraints": {
+      "bannedZones": ["caribbean", "southeastasian", "middleeastern", "latinamerican"],
+      "bannedDishes": ["pho-bo", "jerk-chicken", "falafel", "pad-thai"]
+    },
+    "ingredientPhysics": {
+      "freeWaterReleaseRisk": "low",
+      "textureBehaviorUnderHeat": "holds"
+    },
+    "violationIfBroken": "zoneviolation",
+    "severity": "blocker",
+    "reason": "Paneer is not a universal protein upgrade and leaks South Asian grammar into other zone dishes",
+    "educationalContext": "Paneer is a fresh acid-set dairy cheese that is uniquely South Asian in culinary grammar. It holds form under heat without melting — a property that is meaningful in South Asian cooking but completely foreign to Caribbean smoke-grill logic, Southeast Asian stir-fry balance, or Middle Eastern legume dishes.",
+    "safeAlternatives": [
+      "use the zone's native protein forms instead",
+      "use tofu in Southeast Asian dishes as a structurally similar swap"
+    ],
+    "alternativesByGoal": {
+      "protein-boost": [
+        "increase native protein (chicken, fish, chickpeas) by 25%"
+      ],
+      "vegan": [
+        "use tofu in Southeast Asian zone",
+        "use extra chickpeas or fava beans in Middle Eastern zone"
+      ],
+      "lower-calorie": [
+        "increase legume content within zone grammar"
+      ],
+      "lower-fat": [
+        "use leaner native protein cuts"
+      ],
+      "cultural-coherence": [
+        "stay within zone's allowedProteins list"
+      ],
+      "general": [
+        "use zone-native protein forms"
+      ]
+    },
+    "allowOverride": false
+  },
+
+  {
+    "code": "yogurt-marinade-amplification",
+    "constraints": {
+      "mustNotHave": ["hasMarinade"],
+      "bannedDishes": ["jerk-chicken", "falafel", "pho-bo", "pad-thai"]
+    },
+    "ingredientPhysics": null,
+    "violationIfBroken": "confusionviolation",
+    "severity": "blocker",
+    "reason": "Yogurt marinade only makes sense when the dish already has a marinade structure",
+    "educationalContext": "Yogurt marinades tenderise proteins via acid denaturation. This is load-bearing in biryani and some tandoori preparations, where the marinade is part of the cooking arc. Applying yogurt marinade logic to jerk chicken (a dry-rub dish) overwrites its identity with tandoori grammar — a different cultural and physical process.",
+    "safeAlternatives": [
+      "amplify the dish's existing flavour logic instead",
+      "serve a yogurt-based condiment alongside (raita) if dairy brightness is wanted"
+    ],
+    "alternativesByGoal": {
+      "protein-boost": ["increase native protein portion"],
+      "lower-fat": ["reduce fat-vehicle quantity in the dish's own cooking arc"],
+      "cultural-coherence": ["use the dish's native acid anchor (lime for jerk, tamarind for pad thai)"],
+      "general": ["amplify the dish's own flavour elements"],
+      "vegan": ["use native vegan acid alternatives"],
+      "lower-calorie": ["reduce fat-vehicle quantity"]
+    },
+    "allowOverride": false
+  },
+
+  {
+    "code": "bone-broth-substitute",
+    "constraints": {
+      "bannedMethods": ["dryrubgrill", "rawacidcured", "stirfry", "deepfry"],
+      "bannedDishes": ["jerk-chicken", "falafel", "pad-thai"]
+    },
+    "ingredientPhysics": {
+      "freeWaterReleaseRisk": "medium",
+      "textureBehaviorUnderHeat": "dissolves"
+    },
+    "violationIfBroken": "portabilityviolation",
+    "severity": "warning",
+    "reason": "Bone broth is a braised/simmered context ingredient and does not port to grill or fry methods",
+    "educationalContext": "Bone broth adds gelatin and depth in slow-cooked wet contexts. In a dry-heat method (jerk grill) or dry-texture dish (falafel), it introduces free liquid that fundamentally changes the cooking method and result.",
+    "safeAlternatives": [
+      "use the dish's native umami sources instead",
+      "save bone broth for the braised or simmered component of the dish where one exists"
+    ],
+    "alternativesByGoal": {
+      "protein-boost": ["increase native protein portion"],
+      "lower-calorie": ["use aromatic herb additions instead of fat-based enrichments"],
+      "lower-fat": ["use aromatics for depth without added fat"],
+      "cultural-coherence": ["use umami sources native to the dish's zone"],
+      "vegan": ["use vegetable stock only in braised contexts"],
+      "general": ["use the dish's native liquid if wet addition is needed"]
+    },
+    "allowOverride": true
+  }
+]
