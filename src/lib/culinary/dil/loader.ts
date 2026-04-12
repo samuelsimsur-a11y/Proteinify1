@@ -2,9 +2,14 @@
 // FIX: indexes derived from data at load time (no hardcoding in promptBuilder);
 // alias collision detection; validateDILIntegrity with cross-reference checks.
 
+import { createRequire } from "node:module";
 import { z } from "zod";
-import dishDNAData from "./data/dishDNA.json" with { type: "json" };
-import swapGuardsData from "./data/swapGuards.json" with { type: "json" };
+
+// Load JSON via require() — `import … assert/with { type: "json" }` and some ESM JSON
+// imports crash in Vercel's serverless Node before the handler runs.
+const require = createRequire(import.meta.url);
+const dishDNAData: unknown = require("./data/dishDNA.json");
+const swapGuardsData: unknown = require("./data/swapGuards.json");
 
 import {
   DishDNA,

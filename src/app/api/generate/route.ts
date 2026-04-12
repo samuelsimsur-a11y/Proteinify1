@@ -7,11 +7,10 @@ import OpenAI from "openai";
 
 import { checkGenerateRateLimit, getClientIp } from "@/lib/rateLimit/generateRouteRateLimit";
 import { getDishByIdOrAlias, validateDILIntegrity } from "@/lib/culinary/dil/loader";
+import { proteinifySchema } from "@/lib/culinary/dil/loadProteinifySchema";
 import { validateSwap } from "@/lib/culinary/dil/validator";
 import { buildSystemPrompt, type Mode } from "@/lib/culinary/systemPrompt";
 import type { SwapInput, UserGoal, ValidationResult } from "@/lib/culinary/dil/schemas";
-
-import proteinifySchema from "@/lib/culinary/dil/data/proteinify_schema.json";
 
 // ─── Integrity check once at cold start ──────────────────────────────────────
 let integrityChecked = false;
@@ -543,6 +542,16 @@ export async function POST(req: NextRequest) {
           status: 429,
           headers: { "Retry-After": String(limited.retryAfterSec) },
         }
+      );
+    }
+
+    if (!process.env.OPENAI_API_KEY?.trim()) {
+      return NextResponse.json(
+        {
+          error:
+            "Server is missing OPENAI_API_KEY. Add it under Vercel → Project → Settings → Environment Variables, then redeploy.",
+        },
+        { status: 503 }
       );
     }
 

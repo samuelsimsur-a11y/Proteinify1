@@ -754,8 +754,8 @@ cat > src/lib/culinary/dil/loader.ts << 'ENDOFFILE'
 // alias collision detection; validateDILIntegrity with cross-reference checks.
 
 import { z } from "zod";
-import dishDNAData from "./data/dishDNA.json" with { type: "json" };
-import swapGuardsData from "./data/swapGuards.json" with { type: "json" };
+import dishDNAData from "./data/dishDNA.json";
+import swapGuardsData from "./data/swapGuards.json";
 
 import {
   DishDNA,
