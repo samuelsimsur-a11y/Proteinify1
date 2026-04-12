@@ -7,7 +7,7 @@ import OpenAI from "openai";
 
 import { checkGenerateRateLimit, getClientIp } from "@/lib/rateLimit/generateRouteRateLimit";
 import { getDishByIdOrAlias, validateDILIntegrity } from "@/lib/culinary/dil/loader";
-import { proteinifySchema } from "@/lib/culinary/dil/loadProteinifySchema";
+import { getProteinifySchema } from "@/lib/culinary/dil/loadProteinifySchema";
 import { validateSwap } from "@/lib/culinary/dil/validator";
 import { buildSystemPrompt, type Mode } from "@/lib/culinary/systemPrompt";
 import type { SwapInput, UserGoal, ValidationResult } from "@/lib/culinary/dil/schemas";
@@ -21,7 +21,19 @@ function ensureIntegrity() {
   }
 }
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openaiClient: OpenAI | undefined;
+
+function getOpenAI(): OpenAI {
+  try {
+    if (!openaiClient) {
+      openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    }
+    return openaiClient;
+  } catch (err) {
+    console.error("[generate] OpenAI init failed:", err);
+    throw err;
+  }
+}
 
 // ─── Performance: short-lived response cache ─────────────────────────────────
 // Speeds up repeated prompts (same dish + mode + servings + sliders + goal)
@@ -530,6 +542,11 @@ function buildUserMessage(
 
 // ─── POST handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  if (!process.env.OPENAI_API_KEY) {
+    console.error("[generate] OPENAI_API_KEY is not set");
+    return NextResponse.json({ error: "API key not configured" }, { status: 500 });
+  }
+
   try {
     ensureIntegrity();
 
@@ -542,16 +559,6 @@ export async function POST(req: NextRequest) {
           status: 429,
           headers: { "Retry-After": String(limited.retryAfterSec) },
         }
-      );
-    }
-
-    if (!process.env.OPENAI_API_KEY?.trim()) {
-      return NextResponse.json(
-        {
-          error:
-            "Server is missing OPENAI_API_KEY. Add it under Vercel → Project → Settings → Environment Variables, then redeploy.",
-        },
-        { status: 503 }
       );
     }
 
@@ -603,7 +610,8 @@ export async function POST(req: NextRequest) {
 
     const generationPromise = (async (): Promise<GenerateResponse> => {
       // ── OpenAI call ─────────────────────────────────────────────────────────
-      const completion = await openai.chat.completions.create({
+      const proteinifySchema = getProteinifySchema();
+      const completion = await getOpenAI().chat.completions.create({
         model: "gpt-4.1-mini",
         response_format: {
           type: "json_schema",
