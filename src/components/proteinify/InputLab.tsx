@@ -3,7 +3,7 @@
 import type { SliderValues } from "@/lib/proteinify/types";
 import SliderControl from "./SliderControl";
 import ExampleChips from "./ExampleChips";
-import VeggieToggle from "./VeggieToggle";
+// import VeggieToggle from "./VeggieToggle"; // hidden for now — keep file for later
 
 export type ModeId = "proteinify" | "lean";
 
@@ -34,8 +34,8 @@ export default function InputLab({
   onChangeSlider,
   mode,
   onChangeMode,
-  addVeggies,
-  onAddVeggiesChange,
+  addVeggies: _addVeggies,
+  onAddVeggiesChange: _onAddVeggiesChange,
   thirdVersionLabel,
   showAdvanced,
   onToggleAdvanced,
@@ -117,9 +117,11 @@ export default function InputLab({
               })}
             </div>
 
+            {/* Veggie toggle hidden for now — do not delete component
             <div className="w-full bg-transparent">
               <VeggieToggle value={addVeggies} onChange={onAddVeggiesChange} disabled={disabled} />
             </div>
+            */}
 
             {/* INPUT AREA */}
             <div>

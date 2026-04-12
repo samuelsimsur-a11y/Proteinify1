@@ -1,18 +1,23 @@
 "use client";
 
-import type { RecipeVersion } from "@/lib/proteinify/types";
+import type { RecipeVersion, TransformationMode } from "@/lib/proteinify/types";
+import { displayVersionLabel } from "@/lib/proteinify/displayVersionLabel";
 import { humanizeIngredientDisplay } from "./humanizeIngredientDisplay";
+import { useEffect, useState } from "react";
 
 type Props = {
   dishLabel: string;
   version: RecipeVersion;
+  transformationMode: TransformationMode;
 };
 
-function buildRecipeText(dishLabel: string, version: RecipeVersion) {
+function buildRecipeText(dishLabel: string, version: RecipeVersion, transformationMode: TransformationMode) {
   const lines: string[] = [];
-  lines.push(`${version.label}: ${dishLabel}`);
+  lines.push(`${displayVersionLabel(version, transformationMode)}: ${dishLabel}`);
   lines.push("");
   lines.push(humanizeIngredientDisplay(version.summary));
+  lines.push("");
+  lines.push(`Cook time (estimate): ~${version.cookTimeMinutes} min · Difficulty: ${version.difficulty}`);
   lines.push("");
   lines.push("What changed (by component)");
   const t = version.transformationByComponent;
@@ -65,18 +70,52 @@ function buildRecipeText(dishLabel: string, version: RecipeVersion) {
   return lines.join("\n");
 }
 
-export default function CopyRecipeButton({ dishLabel, version }: Props) {
+export default function CopyRecipeButton({ dishLabel, version, transformationMode }: Props) {
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastFading, setToastFading] = useState(false);
+  const [toastSeq, setToastSeq] = useState(0);
+
+  useEffect(() => {
+    if (!toastVisible) return;
+    const fadeTimer = window.setTimeout(() => setToastFading(true), 2000);
+    const hideTimer = window.setTimeout(() => {
+      setToastVisible(false);
+      setToastFading(false);
+    }, 2350);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [toastVisible, toastSeq]);
+
   return (
-    <button
-      type="button"
-      onClick={async () => {
-        const text = buildRecipeText(dishLabel, version);
-        await navigator.clipboard.writeText(text);
-      }}
-      className="rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] transition hover:bg-[color:var(--accent-light)] hover:text-[color:var(--accent)]"
-    >
-      Copy recipe
-    </button>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={async () => {
+          const text = buildRecipeText(dishLabel, version, transformationMode);
+          await navigator.clipboard.writeText(text);
+          setToastSeq((s) => s + 1);
+          setToastFading(false);
+          setToastVisible(true);
+        }}
+        className="rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] transition hover:bg-[color:var(--accent-light)] hover:text-[color:var(--accent)]"
+      >
+        Copy recipe
+      </button>
+      {toastVisible ? (
+        <div
+          key={toastSeq}
+          role="status"
+          aria-live="polite"
+          className={[
+            "pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-4 py-2 text-xs font-semibold text-[color:var(--text-primary)] shadow-lg transition-opacity duration-300",
+            toastFading ? "opacity-0" : "opacity-100",
+          ].join(" ")}
+        >
+          Copied!
+        </div>
+      ) : null}
+    </div>
   );
 }
-

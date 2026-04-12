@@ -26,7 +26,7 @@ export default function HeroSection() {
               🌮 Birria Tacos +28g protein
             </div>
             <div className="rounded-full border px-3 py-1 text-xs font-semibold text-[color:var(--accent)] bg-[color:var(--surface-offset)]">
-              🍜 Pad Thai → Veggified
+              🍜 Pad Thai +22g protein
             </div>
           </div>
 

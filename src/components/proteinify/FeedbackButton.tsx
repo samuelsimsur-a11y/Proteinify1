@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { RecipeVersion } from "@/lib/proteinify/types";
+import type { RecipeVersion, TransformationMode } from "@/lib/proteinify/types";
+import { displayVersionLabel } from "@/lib/proteinify/displayVersionLabel";
 
 type Props = {
   dish: string;
   resultId: string;
   version: RecipeVersion;
+  transformationMode: TransformationMode;
 };
 
 const FEEDBACK_TAGS = [
@@ -38,12 +40,15 @@ function buildFeedbackUrl(params: {
   return url.toString();
 }
 
-export default function FeedbackButton({ dish, resultId, version }: Props) {
+export default function FeedbackButton({ dish, resultId, version, transformationMode }: Props) {
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState<"up" | "down">("up");
   const [tag, setTag] = useState<FeedbackTag>("other");
 
-  const title = useMemo(() => `Feedback for ${version.label}`, [version.label]);
+  const title = useMemo(
+    () => `Feedback for ${displayVersionLabel(version, transformationMode)}`,
+    [version, transformationMode]
+  );
 
   useEffect(() => {
     if (!open) return;

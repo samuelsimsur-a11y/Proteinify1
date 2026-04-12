@@ -308,10 +308,17 @@ export function expandCompactVersion(cv: CompactVersion, root: ExpandCtx): Recip
       ? steps.slice(0, Math.min(6, steps.length))
       : ["Apply the listed technique swaps in order.", "Taste and adjust seasoning before serving."];
 
+  const cookTimeMinutes =
+    cv.id === "close-match" ? 28 : cv.id === "balanced" ? 36 : 48;
+  const difficulty =
+    cv.id === "close-match" ? "Easy" : cv.id === "balanced" ? "Medium" : "Takes effort";
+
   return {
     id: cv.id,
     label: versionLabel(cv.id, root.transformationMode),
     summary: cv.summaryOneLiner.trim(),
+    cookTimeMinutes,
+    difficulty,
     why: cv.whyOneLiner.trim(),
     macros: { p, d },
     ...versionScores(cv.id, root.identityScore),

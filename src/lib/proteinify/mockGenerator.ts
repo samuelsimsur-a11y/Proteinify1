@@ -585,6 +585,8 @@ function dishTemplates(category: DishCategory) {
         | "adds"
         | "transformationByComponent"
         | "methodAdjustments"
+        | "cookTimeMinutes"
+        | "difficulty"
       > & {
         versionsById: Partial<Record<RecipeVersion["id"], { ingredientsById: (ingredientId: string) => string; steps: RecipeStep[] }>>;
       };
@@ -2165,10 +2167,17 @@ function buildVersion(
       ? stepsTemplate.slice(0, Math.min(6, stepsTemplate.length))
       : ["Apply ingredient swaps above.", "Cook through and taste before serving."];
 
+  const cookTimeMinutes =
+    version === "close-match" ? 25 : version === "balanced" ? 38 : transformationMode === "lean" ? 42 : 52;
+  const difficulty: RecipeVersion["difficulty"] =
+    version === "close-match" ? "Easy" : version === "balanced" ? "Medium" : "Takes effort";
+
   return {
     id: version,
     label,
     summary: modePrefix ? `${modePrefix}${summary}` : summary,
+    cookTimeMinutes,
+    difficulty,
     macros: { p: estimate, d: delta },
     tasteScore,
     realismScore,

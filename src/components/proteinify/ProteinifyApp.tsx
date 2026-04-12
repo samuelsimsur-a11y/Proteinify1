@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   IngredientOverride,
   ProteinifyResponse,
@@ -106,6 +106,8 @@ function buildFastCloseMatchDraft(dish: string): RecipeVersion {
     swapSummary: ["Draft preview", "Identity-first protein move"],
     mealPrepNote: null,
     proteinMathWarning: null,
+    cookTimeMinutes: 30,
+    difficulty: "Medium",
     tasteScore: 8,
     realismScore: 8,
     aggressivenessScore: 4,
@@ -177,6 +179,9 @@ export default function ProteinifyApp() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [regeneratingVersionId, setRegeneratingVersionId] = useState<VersionId | null>(null);
 
+  /** Bumped on mode change so in-flight generates don’t repopulate stale results. */
+  const resultsGenerationKey = useRef(0);
+
   const isBusy = isGenerating || isInitialLoading || regeneratingVersionId !== null;
 
   const recommendedSlidersByMode: Record<ModeId, SliderValues> = {
@@ -191,6 +196,8 @@ export default function ProteinifyApp() {
   };
 
   const handleGenerateAll = async () => {
+    resultsGenerationKey.current += 1;
+    const genKey = resultsGenerationKey.current;
     setIsGenerating(true);
     setError(null);
     setResponse(null);
@@ -223,6 +230,10 @@ export default function ProteinifyApp() {
     );
     setPreviewServings(servings);
     setStreamingVersions(null);
+    if (genKey !== resultsGenerationKey.current) {
+      setIsGenerating(false);
+      return;
+    }
     if (r.ok) {
       setResponse(r.data);
     } else {
@@ -247,6 +258,7 @@ export default function ProteinifyApp() {
 
     setRegeneratingVersionId(versionId);
     setError(null);
+    const genKey = resultsGenerationKey.current;
     const r = await postGenerate({
       dish: inputDish,
       servings,
@@ -257,12 +269,14 @@ export default function ProteinifyApp() {
       transformationMode: mode,
       addVeggies,
     });
-    if (r.ok) {
-      setResponse(r.data);
-      setPreviewServings(servings);
-      setResultId(createResultId());
-    } else {
-      setError(r.error);
+    if (genKey === resultsGenerationKey.current) {
+      if (r.ok) {
+        setResponse(r.data);
+        setPreviewServings(servings);
+        setResultId(createResultId());
+      } else {
+        setError(r.error);
+      }
     }
     setRegeneratingVersionId(null);
   };
@@ -274,6 +288,8 @@ export default function ProteinifyApp() {
   const handleRetryAfterError = async () => {
     setError(null);
     if (!response) {
+      resultsGenerationKey.current += 1;
+      const genKey = resultsGenerationKey.current;
       setIsInitialLoading(true);
       setStreamingVersions([buildFastCloseMatchDraft(inputDish), null, null]);
       setResultId(createResultId());
@@ -303,10 +319,12 @@ export default function ProteinifyApp() {
       );
       setPreviewServings(servings);
       setStreamingVersions(null);
-      if (r.ok) {
-        setResponse(r.data);
-      } else {
-        setError(r.error);
+      if (genKey === resultsGenerationKey.current) {
+        if (r.ok) {
+          setResponse(r.data);
+        } else {
+          setError(r.error);
+        }
       }
       setIsInitialLoading(false);
       return;
@@ -324,10 +342,17 @@ export default function ProteinifyApp() {
         onChangeSlider={onChangeSlider}
         mode={mode}
         onChangeMode={(next) => {
+          resultsGenerationKey.current += 1;
           setMode(next);
           setSliders(recommendedSlidersByMode[next]);
           setOverridesByVersion(emptyOverrides());
           setShowAdvanced(false);
+          setResponse(null);
+          setStreamingVersions(null);
+          setError(null);
+          setRegeneratingVersionId(null);
+          setIsGenerating(false);
+          setIsInitialLoading(false);
         }}
         addVeggies={addVeggies}
         onAddVeggiesChange={setAddVeggies}
@@ -347,6 +372,7 @@ export default function ProteinifyApp() {
           streamingVersions={streamingVersions}
           resultId={resultId}
           dish={inputDish}
+          transformationMode={mode}
           servings={servings}
           previewServings={previewServings}
           onChangePreviewServings={setPreviewServings}

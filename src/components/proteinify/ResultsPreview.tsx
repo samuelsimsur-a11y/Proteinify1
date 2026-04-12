@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProteinifyResponse, RecipeVersion } from "@/lib/proteinify/types";
+import type { ProteinifyResponse, RecipeVersion, TransformationMode } from "@/lib/proteinify/types";
 import { useEffect, useState } from "react";
 import VersionCard from "./VersionCard";
 import { PROTEIN_ONLY_TAGLINE, PROTEIN_OPTIMIZER_SUBLINE } from "./productCopy";
@@ -15,6 +15,7 @@ type Props = {
   streamingVersions: StreamingSlots | null;
   resultId: string;
   dish: string;
+  transformationMode: TransformationMode;
   servings: 1 | 2 | 4 | 6 | 8;
   previewServings: number;
   onChangePreviewServings: (next: number) => void;
@@ -33,6 +34,7 @@ export default function ResultsPreview({
   streamingVersions,
   resultId,
   dish,
+  transformationMode,
   servings,
   previewServings,
   onChangePreviewServings,
@@ -78,39 +80,36 @@ export default function ResultsPreview({
                 {PROTEIN_OPTIMIZER_SUBLINE}
               </div>
             </div>
-            <div className="rounded-[var(--radius-pill)] border border-[color:var(--divider)] bg-[color:var(--surface-offset)] px-2 py-1">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
+            <div className="shrink-0 rounded-[var(--radius-pill)] border border-[color:var(--divider)] bg-[color:var(--surface-offset)] px-2.5 py-1.5">
+              <div className="text-center text-[10px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
                 Portion size
               </div>
-              <div className="flex items-center gap-1">
+              <div className="mt-1 flex items-center justify-center gap-1">
                 <button
                   type="button"
                   onClick={() => onChangePreviewServings(Math.max(1, previewServings - 1))}
-                  className="h-6 w-6 rounded-full border border-[color:var(--divider)] text-xs text-[color:var(--text-muted)] hover:bg-[color:var(--surface-card)]"
+                  className="h-6 w-6 shrink-0 rounded-full border border-[color:var(--divider)] text-xs text-[color:var(--text-muted)] hover:bg-[color:var(--surface-card)]"
                   aria-label="Decrease servings"
                 >
                   -
                 </button>
-                <span className="min-w-[2.5rem] text-center text-xs font-semibold text-[color:var(--text-primary)]">
+                <span className="min-w-[2.25rem] text-center text-xs font-semibold tabular-nums text-[color:var(--text-primary)]">
                   {previewServings}
                 </span>
                 <button
                   type="button"
                   onClick={() => onChangePreviewServings(Math.min(12, previewServings + 1))}
-                  className="h-6 w-6 rounded-full border border-[color:var(--divider)] text-xs text-[color:var(--text-muted)] hover:bg-[color:var(--surface-card)]"
+                  className="h-6 w-6 shrink-0 rounded-full border border-[color:var(--divider)] text-xs text-[color:var(--text-muted)] hover:bg-[color:var(--surface-card)]"
                   aria-label="Increase servings"
                 >
                   +
                 </button>
               </div>
-              <div className="mt-1 max-w-[180px] text-[10px] leading-tight text-[color:var(--text-muted)]">
-                Ingredient amounts scale with servings. Protein values stay per serving.
-              </div>
             </div>
           </div>
         </div>
-        <div className="mt-2 px-1 text-[11px] text-[color:var(--text-muted)]">
-          All protein values are per serving
+        <div className="mt-2 px-1 text-center text-[11px] leading-snug text-[color:var(--text-muted)]">
+          Ingredient amounts scale with the servings you set here; protein numbers stay per serving.
         </div>
 
         {error ? (
@@ -151,6 +150,7 @@ export default function ResultsPreview({
                   <VersionCard
                     key={v.id}
                     dish={dish}
+                    transformationMode={transformationMode}
                     servings={servings}
                     previewServings={previewServings}
                     resultId={resultId}
@@ -189,6 +189,7 @@ export default function ResultsPreview({
                 <VersionCard
                   key={v.id}
                   dish={dish}
+                  transformationMode={transformationMode}
                   servings={servings}
                   previewServings={previewServings}
                   resultId={resultId}

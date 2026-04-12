@@ -60,10 +60,15 @@ export type TransformationByComponent = {
   toppings: string[];
 };
 
+export type RecipeDifficulty = "Easy" | "Medium" | "Takes effort";
+
 export type RecipeVersion = {
   id: "close-match" | "balanced" | "max-protein";
   label: "Close Match" | "Balanced" | "Full Send" | "Fully Light";
   summary: string;
+  /** Estimated total prep + cook minutes for this tier (model-supplied). */
+  cookTimeMinutes: number;
+  difficulty: RecipeDifficulty;
   macros: VersionMacros;
   totalProteinG?: number;
   swapSummary?: string[];

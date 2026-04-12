@@ -3,9 +3,22 @@ import type {
   Ingredient,
   IngredientSwapOption,
   ProteinifyResponse,
+  RecipeDifficulty,
   RecipeVersion,
   TransformationByComponent,
 } from "./types";
+
+const DIFFICULTY_VALUES = new Set<RecipeDifficulty>(["Easy", "Medium", "Takes effort"]);
+
+function parseCookTimeMinutesField(raw: unknown): number {
+  if (!isNumber(raw) || !Number.isFinite(raw)) return 35;
+  return Math.max(5, Math.min(720, Math.round(raw)));
+}
+
+function parseDifficultyField(raw: unknown): RecipeDifficulty {
+  if (!isString(raw) || !DIFFICULTY_VALUES.has(raw as RecipeDifficulty)) return "Medium";
+  return raw as RecipeDifficulty;
+}
 
 const EMPTY_TRANSFORMATION: TransformationByComponent = {
   protein: [],
@@ -243,10 +256,15 @@ export function parseRecipeVersion(raw: unknown): RecipeVersion | null {
     tbcParsed ?? fallbackTransformationFromSwapSummary(swapSummary);
   const methodAdjustments = methodParsed ?? fallbackMethodAdjustments(stepList);
 
+  const cookTimeMinutes = parseCookTimeMinutesField(raw.cookTimeMinutes);
+  const difficulty = parseDifficultyField(raw.difficulty);
+
   return {
     id: id as RecipeVersion["id"],
     label: label as RecipeVersion["label"],
     summary,
+    cookTimeMinutes,
+    difficulty,
     macros: { p, d },
     ...(totalProteinG !== undefined ? { totalProteinG } : {}),
     ...(swapSummary !== undefined ? { swapSummary } : {}),
@@ -401,12 +419,18 @@ export function parseProteinifyResponseJson(json: unknown): ParseResult {
     const transformationByComponent = tbcParsed ?? fallbackTransformationFromSwapSummary(swapArr);
     const methodAdjustments = maParsed ?? fallbackMethodAdjustments(stepsBuilt.filter(Boolean));
 
+    const cookTimeMinutes = parseCookTimeMinutesField(raw.cookTimeMinutes);
+    const difficulty = parseDifficultyField(raw.difficulty);
+
     return {
       id,
-      label: isString(name) && (name === "Close Match" || name === "Balanced" || name === "Full Send")
+      label: isString(name) &&
+        (name === "Close Match" || name === "Balanced" || name === "Full Send" || name === "Fully Light")
         ? name
         : defaultLabel,
       summary: isString(summary) ? summary : "",
+      cookTimeMinutes,
+      difficulty,
       macros: {
         p: isNumber(totalProteinG)
           ? totalProteinG

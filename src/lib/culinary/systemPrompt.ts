@@ -355,6 +355,14 @@ const RECIPE_QUALITY = `
 - Cap sharedRecipe to ~18 ingredients and ~12 instruction steps unless the dish is truly simpler.
 - Cap each tier to ~8 ingredientChanges and ~6 instructionChanges; merge micro-steps.
 - If you run long, cut prose — never truncate your own JSON.
+
+### Tier metadata (required on every tier object)
+- **cookTimeMinutes**: one integer — realistic total minutes (prep + cook) for that tier’s merged recipe at the stated servings.
+- **difficulty**: exactly one of \`Easy\` | \`Medium\` | \`Takes effort\` — honest effort/skill for that tier after its swaps.
+
+### Instruction text vs structured notes (RECIPE_QUALITY)
+- Never embed classification tags or reasoning labels inside instruction sentences (e.g. avoid phrases like "medium melting butter to start roux" or duplicated heat words like "off off heat" spliced into the step string).
+- If a heat note or technique caution is needed, it must appear only in **heatGuard** or **textureNote** on the instruction object — never as improvised tags inside **step** text.
 `.trim();
 
 export function buildSystemPrompt(

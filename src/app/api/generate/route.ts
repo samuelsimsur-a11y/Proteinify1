@@ -8,6 +8,7 @@ import OpenAI from "openai";
 import { checkGenerateRateLimit, getClientIp } from "@/lib/rateLimit/generateRouteRateLimit";
 import { getDishByIdOrAlias, validateDILIntegrity } from "@/lib/culinary/dil/loader";
 import { getProteinifySchema } from "@/lib/culinary/dil/loadProteinifySchema";
+import { patchCompactProteinifySchema } from "@/lib/proteinify/ai/compactSchemaPatch";
 import { validateSwap } from "@/lib/culinary/dil/validator";
 import { buildSystemPrompt, type Mode } from "@/lib/culinary/systemPrompt";
 import type { SwapInput, UserGoal, ValidationResult } from "@/lib/culinary/dil/schemas";
@@ -40,7 +41,7 @@ function getOpenAI(): OpenAI {
 // without reducing quality or changing model behavior.
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 120;
-const CACHE_SCHEMA_VERSION = "v2.8-transformation-map-wire";
+const CACHE_SCHEMA_VERSION = "v2.9-cook-time-difficulty";
 const responseCache = new Map<string, { expiresAt: number; value: GenerateResponse }>();
 const inflightRequests = new Map<string, Promise<GenerateResponse>>();
 // sharedRecipe + 3 tiers still needs headroom; truncation yields invalid JSON and 502s.
@@ -197,12 +198,16 @@ export type TransformationByComponentWire = {
   toppings: string[];
 };
 
+export type TierDifficulty = "Easy" | "Medium" | "Takes effort";
+
 export interface VersionResult {
   name: "Close Match" | "Balanced" | "Full Send";
   summary: string;
   proteinDeltaG: number;
   originalProteinG: number;
   totalProteinG: number;
+  cookTimeMinutes: number;
+  difficulty: TierDifficulty;
   appliedSwapCodes: string[];
   swapSummary: string[];
   transformationByComponent: TransformationByComponentWire;
@@ -260,6 +265,8 @@ type TierPayload = {
   summary: string;
   proteinDeltaG: number;
   totalProteinG: number;
+  cookTimeMinutes: number;
+  difficulty: TierDifficulty;
   appliedSwapCodes: string[];
   swapSummary: string[];
   transformationByComponent: TransformationByComponentWire;
@@ -282,6 +289,16 @@ const EMPTY_COMPONENT_MAP: TransformationByComponentWire = {
   fat: [],
   toppings: [],
 };
+
+function normalizeTierCookTime(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return 35;
+  return Math.max(5, Math.min(720, Math.round(raw)));
+}
+
+function normalizeTierDifficulty(raw: unknown): TierDifficulty {
+  if (raw === "Easy" || raw === "Medium" || raw === "Takes effort") return raw;
+  return "Medium";
+}
 
 function mergeSharedWithTier(
   shared: SharedRecipePayload,
@@ -336,12 +353,16 @@ function mergeSharedWithTier(
           "Add heat-sensitive protein boosts off the burner unless the step says otherwise.",
         ];
 
+  const tierRec = tier as unknown as Record<string, unknown>;
+
   return {
     name: tier.name,
     summary: tier.summary,
     proteinDeltaG: tier.proteinDeltaG,
     originalProteinG: shared.originalProteinG,
     totalProteinG: tier.totalProteinG,
+    cookTimeMinutes: normalizeTierCookTime(tierRec.cookTimeMinutes),
+    difficulty: normalizeTierDifficulty(tierRec.difficulty),
     appliedSwapCodes: tier.appliedSwapCodes,
     swapSummary: tier.swapSummary,
     transformationByComponent: tbc,
@@ -352,7 +373,7 @@ function mergeSharedWithTier(
   };
 }
 
-function isTierPayload(v: Record<string, unknown>): v is TierPayload {
+function isTierPayload(v: Record<string, unknown>): boolean {
   return (
     Array.isArray(v.ingredientChanges) &&
     Array.isArray(v.instructionChanges) &&
@@ -384,7 +405,7 @@ function expandParsedToMergedVersions(parsedObj: Record<string, unknown>): Omit<
       if (!isTierPayload(rec)) {
         throw new Error(`Version ${i} must include ingredientChanges and instructionChanges when using sharedRecipe.`);
       }
-      return mergeSharedWithTier(sr, rec);
+      return mergeSharedWithTier(sr, rec as TierPayload);
     });
   }
 
@@ -409,6 +430,8 @@ function expandParsedToMergedVersions(parsedObj: Record<string, unknown>): Omit<
       proteinDeltaG: rec.proteinDeltaG as number,
       originalProteinG: rec.originalProteinG as number,
       totalProteinG: rec.totalProteinG as number,
+      cookTimeMinutes: normalizeTierCookTime(rec.cookTimeMinutes),
+      difficulty: normalizeTierDifficulty(rec.difficulty),
       appliedSwapCodes: rec.appliedSwapCodes as string[],
       swapSummary: rec.swapSummary as string[],
       transformationByComponent: emptyMap,
@@ -493,6 +516,10 @@ function buildUserMessage(
   lines.push(
     "Every tier MUST include transformationByComponent (5 slots) and methodAdjustments (2–8 short bullets). " +
       "Those fields are the primary UX — full merged recipe is supporting detail."
+  );
+  lines.push(
+    "Every tier MUST include cookTimeMinutes (integer: total realistic prep+cook minutes for that tier’s merged recipe) " +
+      "and difficulty as exactly one of: Easy | Medium | Takes effort."
   );
   lines.push(
     "Non-redundancy: swapSummary carries operational deltas; transformationByComponent must frame changes by *slot role* " +
@@ -610,7 +637,7 @@ export async function POST(req: NextRequest) {
 
     const generationPromise = (async (): Promise<GenerateResponse> => {
       // ── OpenAI call ─────────────────────────────────────────────────────────
-      const proteinifySchema = getProteinifySchema();
+      const proteinifySchema = patchCompactProteinifySchema(getProteinifySchema());
       const completion = await getOpenAI().chat.completions.create({
         model: "gpt-4.1-mini",
         response_format: {

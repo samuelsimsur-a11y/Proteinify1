@@ -1,6 +1,7 @@
 "use client";
 
-import type { RecipeVersion } from "@/lib/proteinify/types";
+import type { RecipeDifficulty, RecipeVersion, TransformationMode } from "@/lib/proteinify/types";
+import { displayVersionLabel } from "@/lib/proteinify/displayVersionLabel";
 import IngredientList from "./IngredientList";
 import CopyRecipeButton from "./CopyRecipeButton";
 import FeedbackButton from "./FeedbackButton";
@@ -9,8 +10,20 @@ import { COMPONENT_SLOTS, getSlotLines, slotHasContent } from "./transformationU
 import { VERSION_CARD_LEGACY_LAYOUT } from "./versionCardLayout";
 import { useEffect, useMemo, useState } from "react";
 
+function difficultyBadgeClass(d: RecipeDifficulty): string {
+  switch (d) {
+    case "Easy":
+      return "border-emerald-200/90 bg-emerald-50 text-emerald-900";
+    case "Medium":
+      return "border-amber-200/90 bg-amber-50 text-amber-950";
+    case "Takes effort":
+      return "border-orange-200/90 bg-orange-50 text-orange-950";
+  }
+}
+
 type Props = {
   dish: string;
+  transformationMode: TransformationMode;
   servings: 1 | 2 | 4 | 6 | 8;
   previewServings: number;
   resultId: string;
@@ -28,6 +41,7 @@ const changedBubbleClass =
 
 function VersionCardLegacy({
   dish,
+  transformationMode,
   servings,
   previewServings,
   resultId,
@@ -103,7 +117,19 @@ function VersionCardLegacy({
       <div className="px-[18px] py-4 transition-colors hover:bg-[color:var(--surface-offset)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="font-display text-lg font-bold text-[color:var(--text-primary)]">{version.label}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-display text-lg font-bold text-[color:var(--text-primary)]">
+                {displayVersionLabel(version, transformationMode)}
+              </span>
+              <span className="text-xs font-medium tabular-nums text-[color:var(--text-muted)]">
+                ~{version.cookTimeMinutes} min
+              </span>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${difficultyBadgeClass(version.difficulty)}`}
+              >
+                {version.difficulty}
+              </span>
+            </div>
             <div className="mt-0.5 line-clamp-2 text-sm text-[color:var(--text-muted)]">{version.summary}</div>
             <div className="mt-1 text-xs text-[color:var(--text-muted)]">
               <span className="font-semibold text-[color:var(--text-primary)]">Protein per serving:</span>{" "}
@@ -337,8 +363,8 @@ function VersionCardLegacy({
             ) : null}
 
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CopyRecipeButton dishLabel={dish} version={version} />
-              <FeedbackButton dish={dish} resultId={resultId} version={version} />
+              <CopyRecipeButton dishLabel={dish} version={version} transformationMode={transformationMode} />
+              <FeedbackButton dish={dish} resultId={resultId} version={version} transformationMode={transformationMode} />
             </div>
           </div>
         </div>
@@ -349,6 +375,7 @@ function VersionCardLegacy({
 
 function VersionCardV2({
   dish,
+  transformationMode,
   servings,
   previewServings,
   resultId,
@@ -425,7 +452,19 @@ function VersionCardV2({
       <div className="px-[18px] py-4 transition-colors hover:bg-[color:var(--surface-offset)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="font-display text-lg font-bold text-[color:var(--text-primary)]">{version.label}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-display text-lg font-bold text-[color:var(--text-primary)]">
+                {displayVersionLabel(version, transformationMode)}
+              </span>
+              <span className="text-xs font-medium tabular-nums text-[color:var(--text-muted)]">
+                ~{version.cookTimeMinutes} min
+              </span>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none ${difficultyBadgeClass(version.difficulty)}`}
+              >
+                {version.difficulty}
+              </span>
+            </div>
             {version.summary ? (
               <div className="mt-0.5 line-clamp-1 text-sm text-[color:var(--text-muted)]">{version.summary}</div>
             ) : null}
@@ -670,8 +709,8 @@ function VersionCardV2({
             </div>
 
             <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CopyRecipeButton dishLabel={dish} version={version} />
-              <FeedbackButton dish={dish} resultId={resultId} version={version} />
+              <CopyRecipeButton dishLabel={dish} version={version} transformationMode={transformationMode} />
+              <FeedbackButton dish={dish} resultId={resultId} version={version} transformationMode={transformationMode} />
             </div>
           </div>
         </div>

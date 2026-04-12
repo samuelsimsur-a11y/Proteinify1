@@ -99,6 +99,15 @@ const recipeVersionSchema = {
     tasteScore: { type: "number" },
     realismScore: { type: "number" },
     aggressivenessScore: { type: "number" },
+    cookTimeMinutes: {
+      type: "number",
+      description: "Estimated total prep + cook minutes for this version",
+    },
+    difficulty: {
+      type: "string",
+      enum: ["Easy", "Medium", "Takes effort"],
+      description: "Skill/effort level for this version",
+    },
     why: { type: "string" },
     adds: {
       type: "array",
@@ -122,6 +131,8 @@ const recipeVersionSchema = {
     "tasteScore",
     "realismScore",
     "aggressivenessScore",
+    "cookTimeMinutes",
+    "difficulty",
     "why",
     "adds",
     "ingredients",
