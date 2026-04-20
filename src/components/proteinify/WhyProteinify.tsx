@@ -5,12 +5,8 @@ export default function WhyProteinify() {
         <div className="pf-card p-6">
           <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Why Proteinify</h2>
           <p className="mt-3 text-sm leading-relaxed text-[color:var(--text-muted)]">
-            <span className="font-medium text-[color:var(--text-primary)]">
-              We track what matters for transformation — protein.
-            </span>{" "}
-            This isn&apos;t a calorie counter: we don&apos;t show calories, fat, or carbs. Proteinify is a
-            transformation engine that upgrades dishes you already crave into higher-protein versions you can
-            actually cook.
+            Proteinify upgrades dishes you already love into higher-protein versions you can actually cook. We optimise
+            for protein — not calories, not macros, not guilt.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] p-4">

@@ -139,6 +139,7 @@ function buildCacheKey(input: {
   servings: number;
   userGoal?: UserGoal;
   sliders?: GenerateRequest["sliders"];
+  importedRecipe?: GenerateRequest["importedRecipe"];
 }): string {
   const sliderPart = JSON.stringify({
     // Bucket sliders to improve cache reuse for near-identical requests.
@@ -154,6 +155,14 @@ function buildCacheKey(input: {
     servings: input.servings,
     goal: input.userGoal ?? null,
     sliders: sliderPart,
+    importHash: input.importedRecipe
+      ? JSON.stringify({
+          i: (input.importedRecipe.ingredients ?? []).slice(0, 30),
+          s: (input.importedRecipe.instructions ?? []).slice(0, 30),
+          src: input.importedRecipe.source ?? null,
+          t: input.importedRecipe.originalTitle ?? null,
+        })
+      : null,
   });
 }
 
@@ -186,6 +195,13 @@ interface GenerateRequest {
     flavorPreservation?: number;
     proteinAggression?: number;
     ingredientRealism?: number;
+  };
+  importedRecipe?: {
+    ingredients?: string[];
+    instructions?: string[];
+    source?: "youtube" | "tiktok";
+    originalTitle?: string;
+    confidence?: "high" | "medium" | "low";
   };
 }
 
@@ -569,6 +585,20 @@ function buildUserMessage(
 
 // ─── POST handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req);
+  const limited = checkGenerateRateLimit(ip);
+  if (!limited.ok) {
+    if (limited.reason === "three-minute") {
+      console.warn(`[ratelimit] IP=${ip} hit 3-minute limit`);
+    } else {
+      console.warn(`[ratelimit] IP=${ip} hit daily limit`);
+    }
+    return NextResponse.json(
+      { error: "Too many requests — try again in a few minutes." },
+      { status: 429 }
+    );
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     console.error("[generate] OPENAI_API_KEY is not set");
     return NextResponse.json({ error: "API key not configured" }, { status: 500 });
@@ -576,18 +606,6 @@ export async function POST(req: NextRequest) {
 
   try {
     ensureIntegrity();
-
-    const ip = getClientIp(req);
-    const limited = checkGenerateRateLimit(ip, { max: 10, windowMs: 60_000 });
-    if (!limited.ok) {
-      return NextResponse.json(
-        { error: "Too many requests. Please wait before generating again." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(limited.retryAfterSec) },
-        }
-      );
-    }
 
     const body: GenerateRequest = await req.json();
     const {
@@ -597,6 +615,7 @@ export async function POST(req: NextRequest) {
       servings: rawServings,
       userGoal,
       sliders,
+      importedRecipe,
     } = body;
 
     const mode = requestMode ?? transformationMode ?? "proteinify";
@@ -613,6 +632,7 @@ export async function POST(req: NextRequest) {
       servings,
       userGoal,
       sliders,
+      importedRecipe,
     });
     const cached = getCachedResponse(cacheKey);
     if (cached) {
@@ -633,7 +653,7 @@ export async function POST(req: NextRequest) {
     );
 
     // ── Build system prompt ───────────────────────────────────────────────────
-    const systemPrompt = buildSystemPrompt(mode, dilDish, servings);
+    const systemPrompt = buildSystemPrompt(mode, dilDish, servings, importedRecipe);
 
     const generationPromise = (async (): Promise<GenerateResponse> => {
       // ── OpenAI call ─────────────────────────────────────────────────────────

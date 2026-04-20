@@ -2,6 +2,14 @@ import type { IngredientOverride, ProteinifyResponse, SliderValues, Transformati
 
 export type VersionId = "close-match" | "balanced" | "max-protein";
 
+export type ImportedRecipeContext = {
+  ingredients: string[];
+  instructions: string[];
+  source?: "youtube" | "tiktok";
+  originalTitle?: string;
+  confidence?: "high" | "medium" | "low";
+};
+
 /** POST /api/generate — same shape we’ll use for the real AI later */
 export type GenerateApiRequestBody = {
   dish: string;
@@ -30,6 +38,11 @@ export type GenerateApiRequestBody = {
    * Full previous payload — required when targetVersion is set so non-target versions stay unchanged.
    */
   previousResponse?: ProteinifyResponse;
+  /**
+   * Recipe details imported from external URL (YouTube/TikTok).
+   * When present, generation should use this as the baseline context.
+   */
+  importedRecipe?: ImportedRecipeContext;
 };
 
 export type GenerateApiErrorBody = {

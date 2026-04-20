@@ -4,18 +4,20 @@ export default function HowItWorks() {
       <div className="mx-auto w-full max-w-3xl">
         <div className="pf-card p-6">
           <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">How it works</h2>
-          <ol className="mt-4 space-y-3 text-sm text-[color:var(--text-muted)]">
-            <li>
-              <span className="font-display font-semibold text-[color:var(--text-primary)]">1.</span> Enter a dish name, meal idea, or
-              short recipe.
+          <ol className="mt-4 list-none space-y-3 pl-0 text-sm text-[color:var(--text-muted)]">
+            <li className="flex gap-2">
+              <span className="font-display font-semibold text-[color:var(--text-primary)] shrink-0">1.</span>
+              <span>Type any dish you already make.</span>
             </li>
-            <li>
-              <span className="font-display font-semibold text-[color:var(--text-primary)]">2.</span> Tune how close you want the flavor,
-              how hard to push protein, and how ordinary the grocery list should stay.
+            <li className="flex gap-2">
+              <span className="font-display font-semibold text-[color:var(--text-primary)] shrink-0">2.</span>
+              <span>Pick a mode and adjust the sliders if you want.</span>
             </li>
-            <li>
-              <span className="font-display font-semibold text-[color:var(--text-primary)]">3.</span> Generate 3 versions and use
-              ingredient swaps to personalize.
+            <li className="flex gap-2">
+              <span className="font-display font-semibold text-[color:var(--text-primary)] shrink-0">3.</span>
+              <span>
+                Get three versions — Close Match keeps it familiar, Full Send pushes hard.
+              </span>
             </li>
           </ol>
         </div>
@@ -23,4 +25,3 @@ export default function HowItWorks() {
     </section>
   );
 }
-

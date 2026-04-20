@@ -368,7 +368,11 @@ const RECIPE_QUALITY = `
 export function buildSystemPrompt(
   mode: Mode,
   dilDish: DishDNA | null,
-  servings: number = 1
+  servings: number = 1,
+  importedRecipe?: {
+    ingredients?: string[];
+    instructions?: string[];
+  }
 ): string {
   const servingNote = servings > 1
     ? `
@@ -423,6 +427,41 @@ three graded tiers (Close Match, Balanced, Full Send). Tiers are change-lists on
     "",
     RECIPE_QUALITY,
   ];
+
+  if (importedRecipe) {
+    const importedIngredients = (importedRecipe.ingredients ?? [])
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, 40);
+    const importedInstructions = (importedRecipe.instructions ?? [])
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, 40);
+
+    if (importedIngredients.length > 0 || importedInstructions.length > 0) {
+      parts.push("", "## Original recipe context (imported by user)");
+      parts.push(
+        "The user imported this specific recipe. Base the transformation on these actual ingredients and amounts, not a generic version of the dish."
+      );
+      if (importedIngredients.length > 0) {
+        parts.push("", "Ingredients:");
+        for (const item of importedIngredients) {
+          parts.push(`- ${item}`);
+        }
+      }
+      if (importedInstructions.length > 0) {
+        parts.push("", "Original instructions:");
+        for (const step of importedInstructions) {
+          parts.push(`- ${step}`);
+        }
+      }
+      parts.push(
+        "",
+        "Preserve what is culturally correct about this recipe.",
+        "Only change what is needed to achieve the protein transformation goal."
+      );
+    }
+  }
 
   if (dilDish) {
     parts.push("", "## Culinary grammar constraints (Dish Identity Library)");

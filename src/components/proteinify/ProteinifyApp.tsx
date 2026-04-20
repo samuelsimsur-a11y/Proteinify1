@@ -8,6 +8,7 @@ import type {
   SliderValues,
 } from "@/lib/proteinify/types";
 import { postGenerate, streamGenerateFull } from "@/lib/proteinify/clientGenerate";
+import { importRecipeFromUrl } from "@/lib/import/clientImport";
 import HeroSection from "./HeroSection";
 import InputLab from "./InputLab";
 import ResultsPreview from "./ResultsPreview";
@@ -58,6 +59,17 @@ function toApiOverrides(o: Record<VersionId, IngredientOverride[]>) {
 
 function toIngredientId(name: string, i: number): string {
   return `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "ing"}-${i + 1}`;
+}
+
+function isUrl(input: string): boolean {
+  const v = input.trim().toLowerCase();
+  return (
+    v.startsWith("http://") ||
+    v.startsWith("https://") ||
+    v.includes("tiktok.com") ||
+    v.includes("youtu.be") ||
+    v.includes("youtube.com")
+  );
 }
 
 function buildFastCloseMatchDraft(dish: string): RecipeVersion {
@@ -173,6 +185,14 @@ export default function ProteinifyApp() {
   >(null);
   const [resultId, setResultId] = useState<string>(createResultId());
   const [error, setError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importContext, setImportContext] = useState<{
+    source: "youtube" | "tiktok";
+    originalTitle: string;
+    confidence: "high" | "medium" | "low";
+    ingredients: string[];
+    instructions: string[];
+  } | null>(null);
 
   /** Used only for retry flows that don't already have a response. */
   const [isInitialLoading, setIsInitialLoading] = useState(false);
@@ -182,7 +202,7 @@ export default function ProteinifyApp() {
   /** Bumped on mode change so in-flight generates don’t repopulate stale results. */
   const resultsGenerationKey = useRef(0);
 
-  const isBusy = isGenerating || isInitialLoading || regeneratingVersionId !== null;
+  const isBusy = isGenerating || isInitialLoading || regeneratingVersionId !== null || isImporting;
 
   const recommendedSlidersByMode: Record<ModeId, SliderValues> = {
     proteinify: DEFAULT_SLIDERS,
@@ -199,19 +219,68 @@ export default function ProteinifyApp() {
     resultsGenerationKey.current += 1;
     const genKey = resultsGenerationKey.current;
     setIsGenerating(true);
+    setIsImporting(false);
     setError(null);
     setResponse(null);
     setStreamingVersions([buildFastCloseMatchDraft(inputDish), null, null]);
     setResultId(createResultId());
     setOverridesByVersion(emptyOverrides());
+    let dishForGenerate = inputDish;
+    let importedRecipe:
+      | {
+          ingredients: string[];
+          instructions: string[];
+          source: "youtube" | "tiktok";
+          originalTitle: string;
+          confidence: "high" | "medium" | "low";
+        }
+      | undefined;
+
+    if (isUrl(inputDish)) {
+      setIsImporting(true);
+      const importRes = await importRecipeFromUrl(inputDish);
+      setIsImporting(false);
+      if (!importRes.ok) {
+        setStreamingVersions(null);
+        setError(importRes.error);
+        setIsGenerating(false);
+        return;
+      }
+      if (!importRes.data.foundRecipe) {
+        setStreamingVersions(null);
+        setError(importRes.data.message);
+        setImportContext({
+          source: importRes.data.source,
+          originalTitle: importRes.data.originalTitle,
+          confidence: importRes.data.confidence,
+          ingredients: [],
+          instructions: [],
+        });
+        setIsGenerating(false);
+        return;
+      }
+      dishForGenerate = importRes.data.dishName;
+      importedRecipe = {
+        ingredients: importRes.data.ingredients,
+        instructions: importRes.data.instructions,
+        source: importRes.data.source,
+        originalTitle: importRes.data.originalTitle,
+        confidence: importRes.data.confidence,
+      };
+      setInputDish(importRes.data.dishName);
+      setImportContext(importedRecipe);
+    } else {
+      setImportContext(null);
+    }
     const r = await streamGenerateFull(
       {
-        dish: inputDish,
+        dish: dishForGenerate,
         servings,
         sliders,
         overridesByVersion: toApiOverrides(emptyOverrides()),
         transformationMode: mode,
         addVeggies,
+        importedRecipe,
       },
       {
         onVersion: (index, version) => {
@@ -268,6 +337,15 @@ export default function ProteinifyApp() {
       overridesByVersion: toApiOverrides(nextMap),
       transformationMode: mode,
       addVeggies,
+      importedRecipe: importContext
+        ? {
+            ingredients: importContext.ingredients,
+            instructions: importContext.instructions,
+            source: importContext.source,
+            originalTitle: importContext.originalTitle,
+            confidence: importContext.confidence,
+          }
+        : undefined,
     });
     if (genKey === resultsGenerationKey.current) {
       if (r.ok) {
@@ -301,6 +379,15 @@ export default function ProteinifyApp() {
           overridesByVersion: toApiOverrides(emptyOverrides()),
           transformationMode: mode,
           addVeggies,
+          importedRecipe: importContext
+            ? {
+                ingredients: importContext.ingredients,
+                instructions: importContext.instructions,
+                source: importContext.source,
+                originalTitle: importContext.originalTitle,
+                confidence: importContext.confidence,
+              }
+            : undefined,
         },
         {
           onVersion: (index, version) => {
@@ -350,6 +437,7 @@ export default function ProteinifyApp() {
           setResponse(null);
           setStreamingVersions(null);
           setError(null);
+          setImportContext(null);
           setRegeneratingVersionId(null);
           setIsGenerating(false);
           setIsInitialLoading(false);
@@ -363,6 +451,7 @@ export default function ProteinifyApp() {
         chips={EXAMPLE_CHIPS}
         onPickExample={onPickExample}
         isGenerating={isGenerating}
+        isImporting={isImporting}
         disabled={isBusy}
       />
 
@@ -376,8 +465,16 @@ export default function ProteinifyApp() {
           servings={servings}
           previewServings={previewServings}
           onChangePreviewServings={setPreviewServings}
-          thirdVersionLabel={thirdVersionLabel}
           error={error}
+          importAttribution={
+            importContext
+              ? {
+                  source: importContext.source,
+                  originalTitle: importContext.originalTitle,
+                }
+              : null
+          }
+          showLowConfidenceImportNotice={importContext?.source === "tiktok" && importContext.confidence === "low"}
           isInitialLoading={isInitialLoading}
           isGenerating={isGenerating}
           regeneratingVersionId={regeneratingVersionId}

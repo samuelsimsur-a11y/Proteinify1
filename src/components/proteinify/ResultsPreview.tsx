@@ -3,8 +3,6 @@
 import type { ProteinifyResponse, RecipeVersion, TransformationMode } from "@/lib/proteinify/types";
 import { useEffect, useState } from "react";
 import VersionCard from "./VersionCard";
-import { PROTEIN_ONLY_TAGLINE, PROTEIN_OPTIMIZER_SUBLINE } from "./productCopy";
-
 type VersionId = RecipeVersion["id"];
 
 type StreamingSlots = [RecipeVersion | null, RecipeVersion | null, RecipeVersion | null];
@@ -19,8 +17,9 @@ type Props = {
   servings: 1 | 2 | 4 | 6 | 8;
   previewServings: number;
   onChangePreviewServings: (next: number) => void;
-  thirdVersionLabel: "Full Send" | "Fully Light";
   error: string | null;
+  importAttribution?: { source: "youtube" | "tiktok"; originalTitle: string } | null;
+  showLowConfidenceImportNotice?: boolean;
   isInitialLoading: boolean;
   isGenerating: boolean;
   regeneratingVersionId: VersionId | null;
@@ -38,8 +37,9 @@ export default function ResultsPreview({
   servings,
   previewServings,
   onChangePreviewServings,
-  thirdVersionLabel,
   error,
+  importAttribution,
+  showLowConfidenceImportNotice,
   isInitialLoading,
   isGenerating,
   regeneratingVersionId,
@@ -67,6 +67,18 @@ export default function ResultsPreview({
   return (
     <section className="px-4 pt-6">
       <div className="mx-auto w-full max-w-3xl">
+        {importAttribution ? (
+          <div className="mb-2 px-1 text-[11px] text-[color:var(--text-muted)]">
+            Transformed from: {importAttribution.originalTitle} •{" "}
+            {importAttribution.source === "youtube" ? "YouTube" : "TikTok"}
+          </div>
+        ) : null}
+        {showLowConfidenceImportNotice ? (
+          <div className="mb-2 rounded-xl border border-yellow-300/80 bg-yellow-50 px-3 py-2 text-xs text-yellow-900">
+            The caption didn&apos;t have a full recipe — we used the dish name to generate your transformation.
+            Results may vary.
+          </div>
+        ) : null}
         <div className="pf-card p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -74,10 +86,7 @@ export default function ResultsPreview({
                 Your transformed versions
               </div>
               <div className="mt-1 text-xs text-[color:var(--text-muted)]">
-                Compare Close Match, Balanced, and {thirdVersionLabel}. {PROTEIN_ONLY_TAGLINE}
-              </div>
-              <div className="mt-1.5 text-[11px] leading-snug text-[color:var(--text-muted)]">
-                {PROTEIN_OPTIMIZER_SUBLINE}
+                Three versions. Pick your trade-off.
               </div>
             </div>
             <div className="shrink-0 rounded-[var(--radius-pill)] border border-[color:var(--divider)] bg-[color:var(--surface-offset)] px-2.5 py-1.5">
@@ -176,9 +185,7 @@ export default function ResultsPreview({
 
         {!showFullSkeleton && !inStreamMode && !response && !error ? (
           <div className="mt-4 pf-card p-4 text-xs leading-relaxed text-[color:var(--text-muted)]">
-            Tap <span className="font-semibold text-[color:var(--text-primary)]">Transform</span> above to generate
-            three versions. First run may call OpenAI plus USDA lookups to ground <span className="font-medium">protein</span>{" "}
-            numbers — it can take 30–90 seconds. We still don&apos;t show calories, fat, or carbs in the app.
+            Results appear here. First run can take up to 30 seconds.
           </div>
         ) : null}
 

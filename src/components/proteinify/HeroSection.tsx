@@ -13,9 +13,7 @@ export default function HeroSection() {
             Your dish. More protein. Same soul.
           </h1>
           <p className="mt-4 max-w-[52ch] text-sm leading-relaxed text-[color:var(--text-muted)]">
-            A protein optimizer — not a calorie tracker. Tell us what you&apos;re cooking and we&apos;ll give you
-            three versions with clear protein per serving and delta. That&apos;s what we show; that&apos;s what we
-            optimize for.
+            Tell us what you&apos;re cooking. Get three protein-optimised versions — each with a different trade-off.
           </p>
 
           <div className="mt-5 flex flex-wrap gap-2">

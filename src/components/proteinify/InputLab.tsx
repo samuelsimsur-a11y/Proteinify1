@@ -3,7 +3,6 @@
 import type { SliderValues } from "@/lib/proteinify/types";
 import SliderControl from "./SliderControl";
 import ExampleChips from "./ExampleChips";
-// import VeggieToggle from "./VeggieToggle"; // hidden for now — keep file for later
 
 export type ModeId = "proteinify" | "lean";
 
@@ -23,6 +22,7 @@ type Props = {
   chips: string[];
   onPickExample: (dish: string) => void;
   isGenerating?: boolean;
+  isImporting?: boolean;
   /** True while initial load, full generate, or single-version regeneration */
   disabled?: boolean;
 };
@@ -43,6 +43,7 @@ export default function InputLab({
   chips,
   onPickExample,
   isGenerating,
+  isImporting,
   disabled,
 }: Props) {
   const modeMeta: Record<
@@ -79,9 +80,6 @@ export default function InputLab({
               <div className="text-sm font-display font-semibold text-[color:var(--text-primary)]">
                 What dish are you transforming today?
               </div>
-              <div className="mt-1 text-xs text-[color:var(--text-muted)]">
-                Choose a mode, then hit the transformation button — sliders are advanced.
-              </div>
             </div>
 
             {/* MODE SELECTOR */}
@@ -117,12 +115,6 @@ export default function InputLab({
               })}
             </div>
 
-            {/* Veggie toggle hidden for now — do not delete component
-            <div className="w-full bg-transparent">
-              <VeggieToggle value={addVeggies} onChange={onAddVeggiesChange} disabled={disabled} />
-            </div>
-            */}
-
             {/* INPUT AREA */}
             <div>
               <input
@@ -130,7 +122,7 @@ export default function InputLab({
                 value={inputDish}
                 onChange={(e) => onChangeDish(e.target.value)}
                 disabled={disabled}
-                placeholder="What dish are you transforming today?"
+                placeholder="Dish name or paste a TikTok / YouTube link"
                 className={[
                   "mt-1 w-full rounded-[var(--radius-pill)] border-2 bg-[color:var(--bg)] px-6 py-4 text-sm",
                   "border-[color:rgba(40,25,10,0.15)] text-[color:var(--text-primary)] placeholder:text-[color:var(--text-faint)]",
@@ -138,6 +130,24 @@ export default function InputLab({
                   "disabled:cursor-not-allowed disabled:opacity-60",
                 ].join(" ")}
               />
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  title="Paste a TikTok link and we'll import the recipe"
+                  onClick={(e) => e.preventDefault()}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[11px] font-bold text-[color:var(--text-muted)]"
+                >
+                  T
+                </button>
+                <button
+                  type="button"
+                  title="Paste a YouTube link and we'll import the recipe"
+                  onClick={(e) => e.preventDefault()}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[11px] font-bold text-[color:var(--text-muted)]"
+                >
+                  ▶
+                </button>
+              </div>
 
               <div className="mt-3">
                 <div className="text-xs font-semibold text-[color:var(--text-muted)]">Examples</div>
@@ -207,7 +217,7 @@ export default function InputLab({
                   boxShadow: `0 4px 16px ${active.glow}`,
                 }}
               >
-                {isGenerating ? "Transforming..." : active.buttonText}
+                {isImporting ? "Importing recipe..." : isGenerating ? "Transforming..." : active.buttonText}
               </button>
             </div>
           </div>

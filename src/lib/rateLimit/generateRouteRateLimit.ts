@@ -1,15 +1,25 @@
 import type { NextRequest } from "next/server";
 
-const STORE_KEY = "__proteinify_generate_ip_rl_v1" as const;
+const SHORT_STORE_KEY = "__proteinify_generate_ip_rl_short_v1" as const;
+const DAILY_STORE_KEY = "__proteinify_generate_ip_rl_daily_v1" as const;
 
-type Timestamps = number[];
+type ShortWindowCounter = { count: number; windowStart: number };
+type DailyCounter = { count: number; date: string };
 
-function getStore(): Map<string, Timestamps> {
-  const g = globalThis as unknown as Record<string, Map<string, Timestamps>>;
-  if (!g[STORE_KEY]) {
-    g[STORE_KEY] = new Map();
+function getShortStore(): Map<string, ShortWindowCounter> {
+  const g = globalThis as unknown as Record<string, Map<string, ShortWindowCounter>>;
+  if (!g[SHORT_STORE_KEY]) {
+    g[SHORT_STORE_KEY] = new Map();
   }
-  return g[STORE_KEY]!;
+  return g[SHORT_STORE_KEY]!;
+}
+
+function getDailyStore(): Map<string, DailyCounter> {
+  const g = globalThis as unknown as Record<string, Map<string, DailyCounter>>;
+  if (!g[DAILY_STORE_KEY]) {
+    g[DAILY_STORE_KEY] = new Map();
+  }
+  return g[DAILY_STORE_KEY]!;
 }
 
 /** Best-effort client IP on Vercel / proxies. */
@@ -19,46 +29,61 @@ export function getClientIp(req: NextRequest): string {
     const first = forwarded.split(",")[0]?.trim();
     if (first) return first;
   }
-  const realIp = req.headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
+  // NextRequest doesn't expose connection directly in typing, but this fallback
+  // is useful in local/dev environments and some proxies.
+  const maybeConn = req as NextRequest & { connection?: { remoteAddress?: string } };
+  const remoteAddress = maybeConn.connection?.remoteAddress?.trim();
+  if (remoteAddress) return remoteAddress;
   return "unknown";
 }
 
-const DEFAULT_MAX = 10;
-const DEFAULT_WINDOW_MS = 60_000;
+const THREE_MIN_WINDOW_MS = 3 * 60_000;
+const MAX_PER_THREE_MIN = 10;
+const MAX_PER_DAY = 30;
 
-/**
- * Sliding window: max `max` hits per `windowMs` per IP.
- * Uses `globalThis` so warm serverless isolates retain counts (not perfect across
- * all Vercel instances — upgrade to Redis/Upstash for strict global limits).
- */
 export function checkGenerateRateLimit(
-  ip: string,
-  options?: { max?: number; windowMs?: number }
-): { ok: true } | { ok: false; retryAfterSec: number } {
-  const max = options?.max ?? DEFAULT_MAX;
-  const windowMs = options?.windowMs ?? DEFAULT_WINDOW_MS;
+  ip: string
+): { ok: true } | { ok: false; reason: "three-minute" | "daily" } {
   const now = Date.now();
-  const store = getStore();
+  const shortStore = getShortStore();
+  const dailyStore = getDailyStore();
+  const today = new Date(now).toISOString().slice(0, 10);
 
-  let hits = store.get(ip) ?? [];
-  hits = hits.filter((t) => now - t < windowMs);
-
-  if (hits.length >= max) {
-    const oldest = hits[0]!;
-    const retryAfterMs = Math.max(0, windowMs - (now - oldest)) + 100;
-    return { ok: false, retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)) };
+  const currentShort = shortStore.get(ip);
+  if (!currentShort || now - currentShort.windowStart >= THREE_MIN_WINDOW_MS) {
+    shortStore.set(ip, { count: 1, windowStart: now });
+  } else {
+    if (currentShort.count >= MAX_PER_THREE_MIN) {
+      return { ok: false, reason: "three-minute" };
+    }
+    currentShort.count += 1;
+    shortStore.set(ip, currentShort);
   }
 
-  hits.push(now);
-  store.set(ip, hits);
+  const currentDaily = dailyStore.get(ip);
+  if (!currentDaily || currentDaily.date !== today) {
+    dailyStore.set(ip, { count: 1, date: today });
+  } else {
+    if (currentDaily.count >= MAX_PER_DAY) {
+      return { ok: false, reason: "daily" };
+    }
+    currentDaily.count += 1;
+    dailyStore.set(ip, currentDaily);
+  }
 
-  // Cap memory if map grows (e.g. many unique IPs in dev)
-  if (store.size > 5000) {
-    for (const key of store.keys()) {
-      const arr = store.get(key)!.filter((t) => now - t < windowMs);
-      if (arr.length === 0) store.delete(key);
-      else store.set(key, arr);
+  // Light memory cleanup for high-cardinality IP traffic.
+  if (shortStore.size > 5000) {
+    for (const [key, value] of shortStore.entries()) {
+      if (now - value.windowStart >= THREE_MIN_WINDOW_MS) {
+        shortStore.delete(key);
+      }
+    }
+  }
+  if (dailyStore.size > 5000) {
+    for (const [key, value] of dailyStore.entries()) {
+      if (value.date !== today) {
+        dailyStore.delete(key);
+      }
     }
   }
 
