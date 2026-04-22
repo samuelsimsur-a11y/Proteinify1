@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 
+import AppVersionReload from "@/components/AppVersionReload";
 import Header from "@/components/proteinify/Header";
 import FooterCta from "@/components/proteinify/FooterCta";
 
 export const metadata: Metadata = {
-  title: "Proteinify",
+  title: "FoodZap",
   description:
-    "Protein optimizer for dishes you already love — we track protein per serving and delta, not calories or full macros.",
+    "FoodZap helps you transform dishes you already love into higher-protein versions with clear trade-offs.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <div className="min-h-dvh flex flex-col">
+          <AppVersionReload />
           <Header />
           <main className="flex-1">{children}</main>
           <FooterCta />
