@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_FOODZAP_BUILD_ID: FOODZAP_BUILD_ID,
   },
   outputFileTracingIncludes: {
-    "/api/foodzap-logo": ["./public/brand/foodzap-mark.png"],
+    "/api/fz-mark": ["./public/brand/foodzap-mark.png"],
   },
   turbopack: {
     root: __dirname,
@@ -28,8 +28,9 @@ const nextConfig: NextConfig = {
   async rewrites() {
     if (staticExport) return [];
     return [
-      { source: "/brand/foodzap-mark", destination: "/api/foodzap-logo" },
-      { source: "/brand/foodzap-mark.png", destination: "/api/foodzap-logo" },
+      { source: "/brand/foodzap-mark", destination: "/api/fz-mark" },
+      { source: "/brand/foodzap-mark.png", destination: "/api/fz-mark" },
+      { source: "/api/foodzap-logo", destination: "/api/fz-mark" },
     ];
   },
   async headers() {

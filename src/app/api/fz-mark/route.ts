@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-/** PNG bytes for header / Capacitor (same path as `public/brand/foodzap-mark.png`). */
+/** Fork+lightning PNG (`public/brand/foodzap-mark.png`). Path is unique to avoid stale CDN 404 on older `/api/foodzap-logo`. */
 export async function GET() {
   try {
     const filePath = path.join(process.cwd(), "public", "brand", "foodzap-mark.png");
@@ -14,7 +14,7 @@ export async function GET() {
       status: 200,
       headers: {
         "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=0, must-revalidate",
+        "Cache-Control": "private, no-cache, no-store, must-revalidate",
       },
     });
   } catch {
