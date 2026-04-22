@@ -5,10 +5,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-/**
- * Serves the logo bytes explicitly. Some Vercel setups were not exposing nested `public/brand/*`
- * as static files (404); this route always ships with the function bundle.
- */
+/** PNG bytes for header / Capacitor (same path as `public/brand/foodzap-mark.png`). */
 export async function GET() {
   try {
     const filePath = path.join(process.cwd(), "public", "brand", "foodzap-mark.png");

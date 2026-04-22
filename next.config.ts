@@ -19,12 +19,18 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_FOODZAP_BUILD_ID: FOODZAP_BUILD_ID,
   },
+  outputFileTracingIncludes: {
+    "/api/foodzap-logo": ["./public/brand/foodzap-mark.png"],
+  },
   turbopack: {
     root: __dirname,
   },
   async rewrites() {
     if (staticExport) return [];
-    return [{ source: "/brand/foodzap-mark.png", destination: "/brand/foodzap-mark" }];
+    return [
+      { source: "/brand/foodzap-mark", destination: "/api/foodzap-logo" },
+      { source: "/brand/foodzap-mark.png", destination: "/api/foodzap-logo" },
+    ];
   },
   async headers() {
     if (staticExport) return [];
@@ -40,10 +46,6 @@ const nextConfig: NextConfig = {
       {
         source: "/feedback",
         headers: [{ key: "Cache-Control", value: "private, no-cache, must-revalidate" }],
-      },
-      {
-        source: "/brand/:path*",
-        headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }],
       },
     ];
   },
