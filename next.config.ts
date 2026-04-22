@@ -22,6 +22,10 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  async rewrites() {
+    if (staticExport) return [];
+    return [{ source: "/brand/foodzap-mark.png", destination: "/brand/foodzap-mark" }];
+  },
   async headers() {
     if (staticExport) return [];
     return [

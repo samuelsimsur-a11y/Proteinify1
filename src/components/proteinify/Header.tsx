@@ -38,7 +38,7 @@ function MoonIcon() {
   );
 }
 
-const MARK_SRC = `/brand/foodzap-mark.png?v=${encodeURIComponent(process.env.NEXT_PUBLIC_FOODZAP_BUILD_ID ?? "1")}`;
+const MARK_SRC = `/brand/foodzap-mark?v=${encodeURIComponent(process.env.NEXT_PUBLIC_FOODZAP_BUILD_ID ?? "1")}`;
 
 /** Brand mark: fork + lightning on dark tile (`public/brand/foodzap-mark.png`). */
 function FoodZapLogo() {
