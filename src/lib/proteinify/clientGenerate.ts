@@ -1,5 +1,6 @@
 import type { GenerateApiRequestBody } from "./apiContract";
 import type { ProteinifyResponse, RecipeVersion } from "./types";
+import { getApiRequestEndpointCandidates, withApiBase } from "../apiBaseUrl";
 import {
   parseProteinifyResponseJson,
   parseRecipeVersion,
@@ -10,6 +11,16 @@ import {
  * Calls the local generation API (full run streams SSE; single-version regen returns JSON).
  */
 const GENERATE_TIMEOUT_MS = 150_000;
+export const GENERATE_ENDPOINT = withApiBase("/api/generate");
+
+function getGenerateEndpointCandidates(): string[] {
+  return getApiRequestEndpointCandidates("/api/generate");
+}
+
+function isRetryableOriginStatus(status: number, hasAnotherCandidate: boolean): boolean {
+  if (!hasAnotherCandidate) return false;
+  return status === 401 || status === 403 || status === 404;
+}
 
 function consumeSseBuffer(
   carry: string,
@@ -60,14 +71,33 @@ export async function streamGenerateFull(
     else signal.addEventListener("abort", () => ctrl.abort(), { once: true });
   }
 
-  let res: Response;
+  const candidates = getGenerateEndpointCandidates();
+  let res: Response | null = null;
+  let endpointUsed = candidates[0] ?? GENERATE_ENDPOINT;
+  const endpointErrors: string[] = [];
   try {
-    res = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
+    for (let i = 0; i < candidates.length; i++) {
+      const endpoint = candidates[i];
+      endpointUsed = endpoint;
+      try {
+        const candidate = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
+        });
+        const hasAnother = i < candidates.length - 1;
+        if (isRetryableOriginStatus(candidate.status, hasAnother)) {
+          endpointErrors.push(`${endpoint} -> ${candidate.status}`);
+          continue;
+        }
+        res = candidate;
+        break;
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") throw e;
+        endpointErrors.push(`${endpoint} -> network`);
+      }
+    }
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
       return {
@@ -76,9 +106,19 @@ export async function streamGenerateFull(
           "Request timed out — generation can take 1–2 minutes. Try again or use PROTEINIFY_USE_MOCK=true for instant mock data.",
       };
     }
-    return { ok: false, error: "Network error: could not reach /api/generate." };
+    return {
+      ok: false,
+      error: `Network error while reaching generation endpoints: ${endpointErrors.join(" | ") || "unknown"}`,
+    };
   } finally {
     clearTimeout(timer);
+  }
+
+  if (!res) {
+    return {
+      ok: false,
+      error: `Network error: could not reach any generate endpoint (${candidates.join(", ")}).`,
+    };
   }
 
   if (!res.ok) {
@@ -87,10 +127,11 @@ export async function streamGenerateFull(
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
-      return { ok: false, error: `Request failed (${res.status})` };
+      return { ok: false, error: `Request failed (${res.status}) at ${endpointUsed}` };
     }
     const errObj = json && typeof json === "object" ? (json as Record<string, unknown>) : null;
-    const msg = typeof errObj?.error === "string" ? errObj.error : `Request failed (${res.status})`;
+    const msg =
+      typeof errObj?.error === "string" ? `${errObj.error} [${res.status}] @ ${endpointUsed}` : `Request failed (${res.status}) at ${endpointUsed}`;
     return { ok: false, error: msg };
   }
 
@@ -101,7 +142,7 @@ export async function streamGenerateFull(
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
-      return { ok: false, error: "Expected SSE stream from /api/generate." };
+      return { ok: false, error: `Expected SSE stream from ${endpointUsed}.` };
     }
     return parseProteinifyResponseJson(json);
   }
@@ -156,7 +197,7 @@ export async function streamGenerateFull(
           "Request timed out — generation can take 1–2 minutes. Try again or use PROTEINIFY_USE_MOCK=true for instant mock data.",
       };
     }
-    return { ok: false, error: "Failed to read generation stream." };
+    return { ok: false, error: `Failed to read generation stream from ${endpointUsed}.` };
   }
 
   if (finalResult) return finalResult;
@@ -171,14 +212,33 @@ export async function postGenerate(body: GenerateApiRequestBody): Promise<ParseR
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), GENERATE_TIMEOUT_MS);
 
-  let res: Response;
+  const candidatesPost = getGenerateEndpointCandidates();
+  let res: Response | null = null;
+  let endpointUsed = candidatesPost[0] ?? GENERATE_ENDPOINT;
+  const endpointErrors: string[] = [];
   try {
-    res = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
+    for (let i = 0; i < candidatesPost.length; i++) {
+      const endpoint = candidatesPost[i];
+      endpointUsed = endpoint;
+      try {
+        const candidate = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
+        });
+        const hasAnother = i < candidatesPost.length - 1;
+        if (isRetryableOriginStatus(candidate.status, hasAnother)) {
+          endpointErrors.push(`${endpoint} -> ${candidate.status}`);
+          continue;
+        }
+        res = candidate;
+        break;
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") throw e;
+        endpointErrors.push(`${endpoint} -> network`);
+      }
+    }
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
       return {
@@ -187,9 +247,19 @@ export async function postGenerate(body: GenerateApiRequestBody): Promise<ParseR
           "Request timed out — generation can take 1–2 minutes. Try again or use PROTEINIFY_USE_MOCK=true for instant mock data.",
       };
     }
-    return { ok: false, error: "Network error: could not reach /api/generate." };
+    return {
+      ok: false,
+      error: `Network error while reaching generation endpoints: ${endpointErrors.join(" | ") || "unknown"}`,
+    };
   } finally {
     clearTimeout(timer);
+  }
+
+  if (!res) {
+    return {
+      ok: false,
+      error: `Network error: could not reach any generate endpoint (${candidatesPost.join(", ")}).`,
+    };
   }
 
   const text = await res.text();
@@ -197,12 +267,13 @@ export async function postGenerate(body: GenerateApiRequestBody): Promise<ParseR
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
-    return { ok: false, error: "Server returned non-JSON." };
+    return { ok: false, error: `Server returned non-JSON from ${endpointUsed}.` };
   }
 
   if (!res.ok) {
     const errObj = json && typeof json === "object" ? (json as Record<string, unknown>) : null;
-    const msg = typeof errObj?.error === "string" ? errObj.error : `Request failed (${res.status})`;
+    const msg =
+      typeof errObj?.error === "string" ? `${errObj.error} [${res.status}] @ ${endpointUsed}` : `Request failed (${res.status}) at ${endpointUsed}`;
     return { ok: false, error: msg };
   }
 
