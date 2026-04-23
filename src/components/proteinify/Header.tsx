@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Preferences } from "@capacitor/preferences";
+import foodzapMark from "@/assets/brand/foodzap-mark.png";
 import { isCapacitorNative } from "@/lib/capacitorEnv";
 import { RECIPE_LOG_EVENT, getSavedRecipes, initRecipeLogNativeStorage } from "@/lib/recipeLog";
 
@@ -38,10 +39,10 @@ function MoonIcon() {
   );
 }
 
-/** Static file from `public/brand/` — no `/api/*` route required (reliable on Vercel when Functions omit app routes). */
-const MARK_SRC = `/brand/foodzap-mark.png?v=${encodeURIComponent(process.env.NEXT_PUBLIC_FOODZAP_BUILD_ID ?? "1")}`;
+/** Bundled under `/_next/static/media/*` so the mark works even when `public/` URLs 404 (mis-rooted deploys). */
+const MARK_SRC = `${foodzapMark.src}?v=${encodeURIComponent(process.env.NEXT_PUBLIC_FOODZAP_BUILD_ID ?? "1")}`;
 
-/** Brand mark: fork + lightning on dark tile (`public/brand/foodzap-mark.png`). */
+/** Brand mark: fork + lightning on dark tile. */
 function FoodZapLogo() {
   return (
     <div className="flex min-w-0 max-w-[46%] flex-nowrap items-center gap-1.5 sm:max-w-[58%] sm:gap-2.5">
