@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Preferences } from "@capacitor/preferences";
-import foodzapMark from "@/assets/brand/foodzap-mark.png";
+import foodzapMark from "@/assets/brand/foodzap-mark.jpg";
 import { isCapacitorNative } from "@/lib/capacitorEnv";
 import { RECIPE_LOG_EVENT, getSavedRecipes, initRecipeLogNativeStorage } from "@/lib/recipeLog";
 
@@ -42,22 +42,22 @@ function MoonIcon() {
 /** Bundled under `/_next/static/media/*` so the mark works even when `public/` URLs 404 (mis-rooted deploys). */
 const MARK_SRC = `${foodzapMark.src}?v=${encodeURIComponent(process.env.NEXT_PUBLIC_FOODZAP_BUILD_ID ?? "1")}`;
 
-/** Brand mark: fork + lightning on dark tile. */
+/** Brand mark: fork + lightning (asset matches tile `#121212`; no white matting). */
 function FoodZapLogo() {
   return (
-    <div className="flex min-w-0 max-w-[46%] flex-nowrap items-center gap-1.5 sm:max-w-[58%] sm:gap-2.5">
-      <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-[#0a0c12] ring-1 ring-white/10 sm:h-10 sm:w-10">
+    <div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-2.5">
+      <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-[#121212] ring-1 ring-white/10 sm:h-10 sm:w-10">
         <img
           src={MARK_SRC}
           alt=""
           width={80}
           height={80}
           decoding="async"
-          className="h-full w-full object-contain p-0.5"
+          className="h-full w-full object-cover object-center"
         />
       </div>
-      <div className="min-w-0 max-[360px]:hidden leading-none sm:block">
-        <div className="font-display truncate text-sm font-extrabold tracking-tight text-[color:var(--accent)] sm:text-base">
+      <div className="min-w-0 leading-none">
+        <div className="font-display whitespace-nowrap text-sm font-extrabold tracking-tight text-[color:var(--accent)] sm:text-base">
           FoodZap
         </div>
       </div>
@@ -178,7 +178,7 @@ export default function Header() {
           scrolled ? "border-b border-[color:var(--divider)]" : "border-b border-transparent",
         ].join(" ")}
       >
-        <a href="/" className="min-w-0 shrink" aria-label="FoodZap home">
+        <a href="/" className="flex min-w-0 flex-1 items-center overflow-hidden pr-1" aria-label="FoodZap home">
           <FoodZapLogo />
         </a>
 
