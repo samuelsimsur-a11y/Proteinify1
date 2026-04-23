@@ -45,8 +45,8 @@ const MARK_SRC = `${foodzapMark.src}?v=${encodeURIComponent(process.env.NEXT_PUB
 /** Brand mark: fork + lightning (asset matches tile `#121212`; no white matting). */
 function FoodZapLogo() {
   return (
-    <div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-2.5">
-      <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-[#121212] ring-1 ring-white/10 sm:h-10 sm:w-10">
+    <div className="flex min-w-[132px] flex-nowrap items-center gap-2 sm:min-w-[156px] sm:gap-2.5">
+      <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-[#121212] sm:h-10 sm:w-10">
         <img
           src={MARK_SRC}
           alt=""
@@ -57,7 +57,7 @@ function FoodZapLogo() {
         />
       </div>
       <div className="min-w-0 leading-none">
-        <div className="font-display whitespace-nowrap text-sm font-extrabold tracking-tight text-[color:var(--accent)] sm:text-base">
+        <div className="font-display whitespace-nowrap text-[15px] font-extrabold tracking-tight text-[color:var(--accent)] sm:text-base">
           FoodZap
         </div>
       </div>
@@ -178,12 +178,12 @@ export default function Header() {
           scrolled ? "border-b border-[color:var(--divider)]" : "border-b border-transparent",
         ].join(" ")}
       >
-        <a href="/" className="flex min-w-0 flex-1 items-center overflow-hidden pr-1" aria-label="FoodZap home">
+        <a href="/" className="flex min-w-0 flex-1 items-center pr-1" aria-label="FoodZap home">
           <FoodZapLogo />
         </a>
 
         <div className="flex shrink-0 flex-nowrap items-center gap-1.5 sm:gap-3">
-          <a href="#how-it-works" className="hidden text-xs font-semibold text-[color:var(--text-muted)] sm:block">
+          <a href="#how-it-works" className="hidden text-xs font-semibold text-[color:var(--text-muted)] md:block">
             How it works
           </a>
           <a
@@ -196,7 +196,7 @@ export default function Header() {
             ].join(" ")}
           >
             <BookmarkRecipesIcon />
-            <span className="text-[11px] font-semibold sm:text-xs">My recipes</span>
+            <span className="hidden text-[11px] font-semibold min-[390px]:inline sm:text-xs">My recipes</span>
             {savedCount > 0 ? (
               <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[color:var(--accent)] px-1.5 text-center text-[10px] font-bold leading-5 text-black">
                 {savedCount > 9 ? "9+" : savedCount}

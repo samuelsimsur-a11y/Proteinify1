@@ -5,7 +5,7 @@ import { useEffect } from "react";
 const BUILD_KEY = "foodzap_build_id";
 /** Bump value (e.g. v2 → v3) to force one hard refresh on every device after a sticky WebView UI fix. */
 const EPOCH_KEY = "foodzap_ui_epoch";
-const EPOCH_MARK = "v9";
+const EPOCH_MARK = "v10";
 
 function bustCachesAndReload() {
   if ("caches" in window && typeof caches.keys === "function") {
