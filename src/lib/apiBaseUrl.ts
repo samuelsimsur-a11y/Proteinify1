@@ -1,9 +1,10 @@
 const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
-const CAPACITOR_PRIMARY_API_BASE_URL = "https://foodzap.vercel.app";
-const CAPACITOR_SECONDARY_API_BASE_URL = "https://proteinify1.vercel.app";
+const CAPACITOR_PRIMARY_API_BASE_URL = "https://proteinify1.vercel.app";
+const CAPACITOR_SECONDARY_API_BASE_URL = "https://foodzap.vercel.app";
+const LAST_GOOD_API_ORIGIN_KEY = "foodzap_last_good_api_origin";
 
-/** Production FoodZap — used when a Vercel *preview* URL has no bundled APIs (e.g. static export). */
-export const PRODUCTION_FOODZAP_BASE = "https://foodzap.vercel.app";
+/** Stable production API host for cross-origin fallback. */
+export const PRODUCTION_FOODZAP_BASE = "https://proteinify1.vercel.app";
 
 function normalizeBase(base: string): string {
   if (!base) return "";
@@ -49,10 +50,47 @@ export function joinApiBase(base: string, path: string): string {
   return `${base}${path}`;
 }
 
+function getLastGoodApiOrigin(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LAST_GOOD_API_ORIGIN_KEY);
+    if (!raw) return null;
+    return normalizeBase(raw);
+  } catch {
+    return null;
+  }
+}
+
+function orderByLastGoodOrigin(endpoints: string[]): string[] {
+  const lastGood = getLastGoodApiOrigin();
+  if (!lastGood) return endpoints;
+  return [...endpoints].sort((a, b) => {
+    const aMatch = a.startsWith(lastGood) ? 0 : 1;
+    const bMatch = b.startsWith(lastGood) ? 0 : 1;
+    return aMatch - bMatch;
+  });
+}
+
 export function withApiBase(path: string): string {
   const base = resolveApiBase();
   if (!path.startsWith("/")) return base ? `${base}/${path}` : `/${path}`;
   return base ? `${base}${path}` : path;
+}
+
+export function markApiEndpointSuccess(endpoint: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(endpoint, window.location.origin);
+    if (!url.origin.startsWith("http")) return;
+    window.localStorage.setItem(LAST_GOOD_API_ORIGIN_KEY, normalizeBase(url.origin));
+  } catch {
+    // ignore malformed endpoint
+  }
+}
+
+export function isLikelyOffline(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return navigator.onLine === false;
 }
 
 /**
@@ -77,7 +115,7 @@ export function getApiRequestEndpointCandidates(apiPath: "/api/generate" | "/api
     };
     push(CAPACITOR_PRIMARY_API_BASE_URL);
     push(CAPACITOR_SECONDARY_API_BASE_URL);
-    return out;
+    return orderByLastGoodOrigin(out);
   }
 
   const endpoints: string[] = [apiPath];
@@ -88,7 +126,7 @@ export function getApiRequestEndpointCandidates(apiPath: "/api/generate" | "/api
 
     // foodzap.vercel.app may be a static shell (no /api/*); retry full Next stack.
     if (hostname === "foodzap.vercel.app") {
-      const alt = joinApiBase(CAPACITOR_SECONDARY_API_BASE_URL, apiPath);
+      const alt = joinApiBase(CAPACITOR_PRIMARY_API_BASE_URL, apiPath);
       if (!endpoints.includes(alt)) endpoints.push(alt);
       return endpoints;
     }
@@ -101,5 +139,5 @@ export function getApiRequestEndpointCandidates(apiPath: "/api/generate" | "/api
     }
   }
 
-  return endpoints;
+  return orderByLastGoodOrigin(endpoints);
 }

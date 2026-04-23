@@ -1,4 +1,9 @@
-import { getApiRequestEndpointCandidates, withApiBase } from "../apiBaseUrl";
+import {
+  getApiRequestEndpointCandidates,
+  isLikelyOffline,
+  markApiEndpointSuccess,
+  withApiBase,
+} from "../apiBaseUrl";
 
 export const IMPORT_ENDPOINT = withApiBase("/api/import");
 
@@ -9,6 +14,24 @@ function getImportEndpointCandidates(): string[] {
 function shouldRetryImport(status: number, hasAnotherCandidate: boolean): boolean {
   if (!hasAnotherCandidate) return false;
   return status === 401 || status === 403 || status === 404;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchImportWithRetry(endpoint: string, init: RequestInit, retries: number): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetch(endpoint, init);
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= retries) break;
+      await wait(450 * (attempt + 1));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("network");
 }
 
 export type ImportResponse =
@@ -41,22 +64,30 @@ export async function importRecipeFromUrl(url: string): Promise<
       const endpoint = candidates[i];
       endpointUsed = endpoint;
       try {
-        const candidate = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
-        });
+        const candidate = await fetchImportWithRetry(
+          endpoint,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+          },
+          1
+        );
         const hasAnother = i < candidates.length - 1;
         if (shouldRetryImport(candidate.status, hasAnother)) {
           continue;
         }
         res = candidate;
+        markApiEndpointSuccess(endpoint);
         break;
       } catch {
         // try next endpoint
       }
     }
     if (!res) {
+      if (isLikelyOffline()) {
+        return { ok: false, error: "No internet connection detected. Reconnect and try again." };
+      }
       return {
         ok: false,
         error: `Could not reach any import endpoint (${candidates.join(", ")}).`,

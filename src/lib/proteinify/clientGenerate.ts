@@ -1,6 +1,11 @@
 import type { GenerateApiRequestBody } from "./apiContract";
 import type { ProteinifyResponse, RecipeVersion } from "./types";
-import { getApiRequestEndpointCandidates, withApiBase } from "../apiBaseUrl";
+import {
+  getApiRequestEndpointCandidates,
+  isLikelyOffline,
+  markApiEndpointSuccess,
+  withApiBase,
+} from "../apiBaseUrl";
 import {
   parseProteinifyResponseJson,
   parseRecipeVersion,
@@ -12,6 +17,7 @@ import {
  */
 const GENERATE_TIMEOUT_MS = 150_000;
 export const GENERATE_ENDPOINT = withApiBase("/api/generate");
+const NETWORK_RETRY_DELAY_MS = 450;
 
 function getGenerateEndpointCandidates(): string[] {
   return getApiRequestEndpointCandidates("/api/generate");
@@ -20,6 +26,28 @@ function getGenerateEndpointCandidates(): string[] {
 function isRetryableOriginStatus(status: number, hasAnotherCandidate: boolean): boolean {
   if (!hasAnotherCandidate) return false;
   return status === 401 || status === 403 || status === 404;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchJsonWithRetry(
+  endpoint: string,
+  init: RequestInit,
+  retries: number
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetch(endpoint, init);
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= retries) break;
+      await wait(NETWORK_RETRY_DELAY_MS * (attempt + 1));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("network");
 }
 
 function consumeSseBuffer(
@@ -80,18 +108,23 @@ export async function streamGenerateFull(
       const endpoint = candidates[i];
       endpointUsed = endpoint;
       try {
-        const candidate = await fetch(endpoint, {
+        const candidate = await fetchJsonWithRetry(
+          endpoint,
+          {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
           signal: ctrl.signal,
-        });
+          },
+          1
+        );
         const hasAnother = i < candidates.length - 1;
         if (isRetryableOriginStatus(candidate.status, hasAnother)) {
           endpointErrors.push(`${endpoint} -> ${candidate.status}`);
           continue;
         }
         res = candidate;
+        markApiEndpointSuccess(endpoint);
         break;
       } catch (e) {
         if (e instanceof Error && e.name === "AbortError") throw e;
@@ -115,6 +148,12 @@ export async function streamGenerateFull(
   }
 
   if (!res) {
+    if (isLikelyOffline()) {
+      return {
+        ok: false,
+        error: "No internet connection detected. Reconnect and try again.",
+      };
+    }
     return {
       ok: false,
       error: `Network error: could not reach any generate endpoint (${candidates.join(", ")}).`,
@@ -221,18 +260,23 @@ export async function postGenerate(body: GenerateApiRequestBody): Promise<ParseR
       const endpoint = candidatesPost[i];
       endpointUsed = endpoint;
       try {
-        const candidate = await fetch(endpoint, {
+        const candidate = await fetchJsonWithRetry(
+          endpoint,
+          {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
           signal: ctrl.signal,
-        });
+          },
+          1
+        );
         const hasAnother = i < candidatesPost.length - 1;
         if (isRetryableOriginStatus(candidate.status, hasAnother)) {
           endpointErrors.push(`${endpoint} -> ${candidate.status}`);
           continue;
         }
         res = candidate;
+        markApiEndpointSuccess(endpoint);
         break;
       } catch (e) {
         if (e instanceof Error && e.name === "AbortError") throw e;
@@ -256,6 +300,12 @@ export async function postGenerate(body: GenerateApiRequestBody): Promise<ParseR
   }
 
   if (!res) {
+    if (isLikelyOffline()) {
+      return {
+        ok: false,
+        error: "No internet connection detected. Reconnect and try again.",
+      };
+    }
     return {
       ok: false,
       error: `Network error: could not reach any generate endpoint (${candidatesPost.join(", ")}).`,
