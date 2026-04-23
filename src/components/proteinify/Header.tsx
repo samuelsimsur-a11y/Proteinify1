@@ -38,7 +38,8 @@ function MoonIcon() {
   );
 }
 
-const MARK_SRC = `/api/fz-mark?v=${encodeURIComponent(process.env.NEXT_PUBLIC_FOODZAP_BUILD_ID ?? "1")}`;
+/** Static file from `public/brand/` — no `/api/*` route required (reliable on Vercel when Functions omit app routes). */
+const MARK_SRC = `/brand/foodzap-mark.png?v=${encodeURIComponent(process.env.NEXT_PUBLIC_FOODZAP_BUILD_ID ?? "1")}`;
 
 /** Brand mark: fork + lightning on dark tile (`public/brand/foodzap-mark.png`). */
 function FoodZapLogo() {

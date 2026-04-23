@@ -19,19 +19,8 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_FOODZAP_BUILD_ID: FOODZAP_BUILD_ID,
   },
-  outputFileTracingIncludes: {
-    "/api/fz-mark": ["./public/brand/foodzap-mark.png"],
-  },
   turbopack: {
     root: __dirname,
-  },
-  async rewrites() {
-    if (staticExport) return [];
-    return [
-      { source: "/brand/foodzap-mark", destination: "/api/fz-mark" },
-      { source: "/brand/foodzap-mark.png", destination: "/api/fz-mark" },
-      { source: "/api/foodzap-logo", destination: "/api/fz-mark" },
-    ];
   },
   async headers() {
     if (staticExport) return [];
