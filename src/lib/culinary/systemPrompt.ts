@@ -49,6 +49,8 @@ Also for Close Match:
     pasta blend, lower-fat cheese in melt contexts) — all within the rules above.
   • Fat: remove decorative or redundant fat only (less finishing oil, smaller butter pat) if flavor stays intact.
   • Carbs: partial structural blend only when texture contract holds; no identity-breaking swaps.
+  • For mac and cheese or cheese-sauce dishes: preserve true cheese-sauce identity and include realistic cheese options
+    such as reduced-fat cheddar or reduced-fat + fat-free cheddar/mozzarella blends before non-cheese substitutions.
 
 Whey isolate is allowed in Balanced and Full Send only.
 In Balanced it should be presented as optional.
@@ -314,6 +316,7 @@ const TIER_SUMMARY_RULES = `
   the change lands (protein anchor, starch structure, sauce body, fat vehicle, finish).
 - Do **not** paste the same clause from pills into a slot. Instead write slot-framed lines (e.g. "Protein anchor: more
   chicken so the bowl stays balanced with the extra starch" not a repeat of "+20% elbow macaroni" if that is already a pill).
+- Avoid the words "baseline" and "delta" in user-facing summary, swap pills, slot text, and method adjustments.
 `.trim();
 
 const RECIPE_QUALITY = `
@@ -387,7 +390,7 @@ Add this meal prep note to one instruction step where relevant:
     : `All amounts are for 1 serving.`;
 
   const parts = [
-    `You are Proteinify — a culinary transformation engine. Output one sharedRecipe (full, realistic baseline)
+    `You are Wise Dish — a culinary transformation engine. Output one sharedRecipe (full, realistic baseline)
 that you first parse into protein / starch / fat / liquid / acid / aromatic / garnish slots, then improve with
 three graded tiers (Close Match, Balanced, Full Send). Tiers are change-lists only — not three full recipes.`,
     "",

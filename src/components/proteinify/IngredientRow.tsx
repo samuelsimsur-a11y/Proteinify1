@@ -8,15 +8,9 @@ type Props = {
   ingredient: Ingredient;
   swapDisabled?: boolean;
   onSwap: (replacement: string) => void;
-  deltaPerIngredient?: number;
 };
 
-export default function IngredientRow({ ingredient, swapDisabled, onSwap, deltaPerIngredient }: Props) {
-  const deltaText =
-    typeof deltaPerIngredient === "number" && Number.isFinite(deltaPerIngredient) && deltaPerIngredient > 0
-      ? `(+${deltaPerIngredient}g)`
-      : null;
-
+export default function IngredientRow({ ingredient, swapDisabled, onSwap }: Props) {
   const reason = (ingredient.reason ?? "").trim();
 
   return (
@@ -29,9 +23,6 @@ export default function IngredientRow({ ingredient, swapDisabled, onSwap, deltaP
             </span>
             <span className="text-[color:var(--accent)]">→</span>
             <span className="font-medium">{humanizeIngredientDisplay(ingredient.current)}</span>
-            {deltaText ? (
-              <span className="text-xs font-semibold text-[color:var(--accent-forest)]">{deltaText}</span>
-            ) : null}
           </div>
           {reason ? (
             <p className="mt-1.5 text-xs leading-snug text-[color:var(--text-muted)]">

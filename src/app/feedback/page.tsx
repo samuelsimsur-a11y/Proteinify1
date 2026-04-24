@@ -1,3 +1,8 @@
+"use client";
+
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+
 type SearchRecord = Record<string, string | string[] | undefined>;
 
 function pick(sp: SearchRecord, key: string): string {
@@ -6,8 +11,15 @@ function pick(sp: SearchRecord, key: string): string {
   return v ?? "";
 }
 
-export default async function FeedbackPage(props: PageProps<"/feedback">) {
-  const searchParams = await props.searchParams;
+function FeedbackContent() {
+  const sp = useSearchParams();
+  const searchParams: SearchRecord = {
+    resultId: sp.get("resultId") ?? undefined,
+    dish: sp.get("dish") ?? undefined,
+    version: sp.get("version") ?? undefined,
+    rating: sp.get("rating") ?? undefined,
+    tag: sp.get("tag") ?? undefined,
+  };
   const resultId = pick(searchParams, "resultId");
   const dish = pick(searchParams, "dish");
   const version = pick(searchParams, "version");
@@ -50,5 +62,13 @@ export default async function FeedbackPage(props: PageProps<"/feedback">) {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function FeedbackPage() {
+  return (
+    <Suspense fallback={<div className="px-4 py-10" />}>
+      <FeedbackContent />
+    </Suspense>
   );
 }

@@ -20,6 +20,13 @@ type Props = {
   error: string | null;
   importAttribution?: { source: "youtube" | "tiktok"; originalTitle: string } | null;
   showLowConfidenceImportNotice?: boolean;
+  cacheNotice?: {
+    title: string;
+    subtitle?: string;
+    actionLabel: string;
+    actionDisabled?: boolean;
+    onAction: () => void;
+  } | null;
   isInitialLoading: boolean;
   isGenerating: boolean;
   regeneratingVersionId: VersionId | null;
@@ -40,6 +47,7 @@ export default function ResultsPreview({
   error,
   importAttribution,
   showLowConfidenceImportNotice,
+  cacheNotice,
   isInitialLoading,
   isGenerating,
   regeneratingVersionId,
@@ -79,6 +87,22 @@ export default function ResultsPreview({
             Results may vary.
           </div>
         ) : null}
+        {cacheNotice ? (
+          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-2 text-xs transition-all duration-200">
+            <span className="text-[color:var(--text-muted)]">{cacheNotice.title}</span>
+            <button
+              type="button"
+              onClick={cacheNotice.onAction}
+              disabled={cacheNotice.actionDisabled}
+              className="font-semibold text-[color:var(--accent)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {cacheNotice.actionLabel}
+            </button>
+            {cacheNotice.subtitle ? (
+              <span className="w-full text-[11px] text-[color:var(--text-muted)]">{cacheNotice.subtitle}</span>
+            ) : null}
+          </div>
+        ) : null}
         <div className="pf-card p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -86,7 +110,7 @@ export default function ResultsPreview({
                 Your transformed versions
               </div>
               <div className="mt-1 text-xs text-[color:var(--text-muted)]">
-                Three versions. Pick your trade-off.
+                Three versions.
               </div>
             </div>
             <div className="shrink-0 rounded-[var(--radius-pill)] border border-[color:var(--divider)] bg-[color:var(--surface-offset)] px-2.5 py-1.5">
@@ -97,18 +121,18 @@ export default function ResultsPreview({
                 <button
                   type="button"
                   onClick={() => onChangePreviewServings(Math.max(1, previewServings - 1))}
-                  className="h-6 w-6 shrink-0 rounded-full border border-[color:var(--divider)] text-xs text-[color:var(--text-muted)] hover:bg-[color:var(--surface-card)]"
+                  className="h-11 w-11 shrink-0 rounded-full border border-[color:var(--divider)] text-sm text-[color:var(--text-muted)] hover:bg-[color:var(--surface-card)]"
                   aria-label="Decrease servings"
                 >
                   -
                 </button>
-                <span className="min-w-[2.25rem] text-center text-xs font-semibold tabular-nums text-[color:var(--text-primary)]">
+                <span className="min-w-[2.5rem] text-center text-sm font-semibold tabular-nums text-[color:var(--text-primary)]">
                   {previewServings}
                 </span>
                 <button
                   type="button"
                   onClick={() => onChangePreviewServings(Math.min(12, previewServings + 1))}
-                  className="h-6 w-6 shrink-0 rounded-full border border-[color:var(--divider)] text-xs text-[color:var(--text-muted)] hover:bg-[color:var(--surface-card)]"
+                  className="h-11 w-11 shrink-0 rounded-full border border-[color:var(--divider)] text-sm text-[color:var(--text-muted)] hover:bg-[color:var(--surface-card)]"
                   aria-label="Increase servings"
                 >
                   +
@@ -118,7 +142,7 @@ export default function ResultsPreview({
           </div>
         </div>
         <div className="mt-2 px-1 text-center text-[11px] leading-snug text-[color:var(--text-muted)]">
-          Ingredient amounts scale with the servings you set here; protein numbers stay per serving.
+          Ingredients scale with serving size. Protein stays per serving.
         </div>
 
         {error ? (

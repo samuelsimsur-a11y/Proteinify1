@@ -1,10 +1,14 @@
 const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
-const CAPACITOR_PRIMARY_API_BASE_URL = "https://proteinify1.vercel.app";
-const CAPACITOR_SECONDARY_API_BASE_URL = "https://foodzap.vercel.app";
-const LAST_GOOD_API_ORIGIN_KEY = "foodzap_last_good_api_origin";
+const rawFallbacks = process.env.NEXT_PUBLIC_API_FALLBACK_URLS?.trim() ?? "";
+const PRODUCTION_API_BASE = "https://foodzap.vercel.app";
+const LEGACY_PRODUCTION_API_BASE = "https://proteinify1.vercel.app";
+const CAPACITOR_PRIMARY_API_BASE_URL = PRODUCTION_API_BASE;
+const CAPACITOR_SECONDARY_API_BASE_URL = LEGACY_PRODUCTION_API_BASE;
+const LAST_GOOD_API_ORIGIN_KEY = "wisedish_last_good_api_origin";
+const LEGACY_LAST_GOOD_API_ORIGIN_KEY = "foodzap_last_good_api_origin";
 
 /** Stable production API host for cross-origin fallback. */
-export const PRODUCTION_FOODZAP_BASE = "https://proteinify1.vercel.app";
+export const PRODUCTION_WISEDISH_BASE = PRODUCTION_API_BASE;
 
 function normalizeBase(base: string): string {
   if (!base) return "";
@@ -12,6 +16,10 @@ function normalizeBase(base: string): string {
 }
 
 const API_BASE_URL = normalizeBase(rawBase);
+const API_FALLBACKS = rawFallbacks
+  .split(",")
+  .map((s) => normalizeBase(s.trim()))
+  .filter(Boolean);
 
 function shouldUseCapacitorFallback(): boolean {
   if (typeof window === "undefined") return false;
@@ -38,6 +46,7 @@ export function getResolvedApiBase(): string {
 export function getApiBaseCandidates(): string[] {
   const unique = new Set<string>();
   if (API_BASE_URL) unique.add(API_BASE_URL);
+  for (const fallback of API_FALLBACKS) unique.add(fallback);
   if (shouldUseCapacitorFallback()) {
     unique.add(CAPACITOR_PRIMARY_API_BASE_URL);
     unique.add(CAPACITOR_SECONDARY_API_BASE_URL);
@@ -53,7 +62,9 @@ export function joinApiBase(base: string, path: string): string {
 function getLastGoodApiOrigin(): string | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(LAST_GOOD_API_ORIGIN_KEY);
+    const raw =
+      window.localStorage.getItem(LAST_GOOD_API_ORIGIN_KEY) ??
+      window.localStorage.getItem(LEGACY_LAST_GOOD_API_ORIGIN_KEY);
     if (!raw) return null;
     return normalizeBase(raw);
   } catch {
@@ -83,6 +94,7 @@ export function markApiEndpointSuccess(endpoint: string): void {
     const url = new URL(endpoint, window.location.origin);
     if (!url.origin.startsWith("http")) return;
     window.localStorage.setItem(LAST_GOOD_API_ORIGIN_KEY, normalizeBase(url.origin));
+    window.localStorage.removeItem(LEGACY_LAST_GOOD_API_ORIGIN_KEY);
   } catch {
     // ignore malformed endpoint
   }
@@ -95,7 +107,7 @@ export function isLikelyOffline(): boolean {
 
 /**
  * Ordered endpoints to POST for this route (relative first on web = same deployment).
- * Vercel preview hostnames (`*.vercel.app` except production) also try production FoodZap so
+ * Vercel preview hostnames (`*.vercel.app` except production) also try production Wise Dish so
  * static or misconfigured previews still work when APIs exist on production.
  */
 export function getApiRequestEndpointCandidates(apiPath: "/api/generate" | "/api/import"): string[] {
@@ -104,7 +116,8 @@ export function getApiRequestEndpointCandidates(apiPath: "/api/generate" | "/api
   }
 
   if (API_BASE_URL) {
-    return [joinApiBase(API_BASE_URL, apiPath)];
+    const bases = [API_BASE_URL, ...API_FALLBACKS];
+    return orderByLastGoodOrigin(bases.map((base) => joinApiBase(base, apiPath)));
   }
 
   if (shouldUseCapacitorFallback()) {
@@ -115,6 +128,7 @@ export function getApiRequestEndpointCandidates(apiPath: "/api/generate" | "/api
     };
     push(CAPACITOR_PRIMARY_API_BASE_URL);
     push(CAPACITOR_SECONDARY_API_BASE_URL);
+    for (const fallback of API_FALLBACKS) push(fallback);
     return orderByLastGoodOrigin(out);
   }
 
@@ -124,17 +138,17 @@ export function getApiRequestEndpointCandidates(apiPath: "/api/generate" | "/api
     const { protocol, hostname } = window.location;
     if (protocol !== "https:") return endpoints;
 
-    // foodzap.vercel.app may be a static shell (no /api/*); retry full Next stack.
-    if (hostname === "foodzap.vercel.app") {
+    // If this host is static-only, retry against explicit production API host.
+    if (hostname === new URL(PRODUCTION_API_BASE).hostname) {
       const alt = joinApiBase(CAPACITOR_PRIMARY_API_BASE_URL, apiPath);
       if (!endpoints.includes(alt)) endpoints.push(alt);
       return endpoints;
     }
 
     const onVercelPreview =
-      hostname.endsWith(".vercel.app") && hostname !== "foodzap.vercel.app";
+      hostname.endsWith(".vercel.app") && hostname !== new URL(PRODUCTION_API_BASE).hostname;
     if (onVercelPreview) {
-      const fallback = joinApiBase(PRODUCTION_FOODZAP_BASE, apiPath);
+      const fallback = joinApiBase(PRODUCTION_WISEDISH_BASE, apiPath);
       if (!endpoints.includes(fallback)) endpoints.push(fallback);
     }
   }

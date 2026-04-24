@@ -35,7 +35,7 @@ We use **`N`** and **`N.M`** (like `3.2`, `4.1`). No third decimal unless you tr
 
 ## Current head
 
-**`5.1`** — full agent-history backfill documented in this file.
+**`6.0`** — concise macro/copy pass with gym-mode-ready copy branch note.
 
 Agents: when you finish a *notable* change, **bump the head**, **append a row** to the ledger (newest first), and mention the new ID in your summary.
 
@@ -45,6 +45,7 @@ Agents: when you finish a *notable* change, **bump the head**, **append a row** 
 
 | ID | Date | Source | Summary | Primary areas / files | Revert hints |
 |----|------|--------|---------|-------------------------|--------------|
+| **6.0** | 2026-04-23 | [agent] | UI copy compression pass: remove redundant macro wording (“baseline/after/delta” verbosity), shorten results helper text, and register as independent copy layer suitable for a future **gym-mode tone profile** | `src/components/proteinify/VersionCard.tsx`, `src/components/proteinify/ResultsPreview.tsx`, `docs/EVOLUTION.md` | Restore prior strings in those files |
 | **5.1** | 2026-04-10 | [agent] | Expanded evolution ledger with **full backfill** of agent work from transcripts (no git) | `docs/EVOLUTION.md` | Remove redundant rows; restore shorter ledger |
 | **5.0** | 2026-04-10 | [agent] | Introduced **EVOLUTION.md** + pointer in `.cursorrules` for cross-session tracking | `docs/EVOLUTION.md`, `.cursorrules` | Delete `docs/EVOLUTION.md` section from `.cursorrules` |
 | **4.1** | 2026-04-10 | [prompt]+[agent] | Close Match: **bans whey/powders/supplements**; **+8g** min delta; **CREATIVE_SWAP_PALETTE**; **STRUCTURAL_DISH_RULES**; whey pairing / ≤2-of-3 tiers; swapSummary Close Match rule | `src/lib/culinary/systemPrompt.ts` | Restore prior `MODE_INSTRUCTIONS`, remove new constants from `buildSystemPrompt` |
@@ -86,6 +87,7 @@ Agents: when you finish a *notable* change, **bump the head**, **append a row** 
 15. **4.1** — Close Match protein rules, creative palette, structural dishes.  
 16. **5.0** — Evolution doc + rules pointer.  
 17. **5.1** — Full agent ledger backfill (this document).
+18. **6.0** — Concise macro and helper-copy reduction; logged for future gym-mode copy branching.
 
 ---
 
@@ -103,4 +105,4 @@ Agents: when you finish a *notable* change, **bump the head**, **append a row** 
 
 ---
 
-*Last updated: 2026-04-10 (5.1 backfill)*
+*Last updated: 2026-04-23 (6.0 concise-copy pass)*

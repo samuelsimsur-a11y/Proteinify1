@@ -97,8 +97,6 @@ function VersionCardLegacy({
   const scaledDelta = Math.round(computedDelta * scaleFactor);
   const scaledTotalProtein = Math.round(totalProtein * scaleFactor);
   const showMealPrepNote = servings > 1 && !!version.mealPrepNote;
-  const deltaPerIngredient =
-    version.ingredients.length > 0 ? Math.max(1, Math.round(computedDelta / version.ingredients.length)) : 0;
 
   const fullRecipeToggleLabel = expanded
     ? "Hide ingredients and instructions"
@@ -133,15 +131,15 @@ function VersionCardLegacy({
             <div className="mt-0.5 line-clamp-2 text-sm text-[color:var(--text-muted)]">{version.summary}</div>
             <div className="mt-1 text-xs text-[color:var(--text-muted)]">
               <span className="font-semibold text-[color:var(--text-primary)]">Protein per serving:</span>{" "}
-              {originalProtein}g baseline → {totalProtein}g after{" "}
+              {originalProtein}g → {totalProtein}g{" "}
               <span className="font-semibold text-[color:var(--text-primary)]">
-                ({computedDelta >= 0 ? `+${computedDelta}g` : `${computedDelta}g`} delta)
+                ({computedDelta >= 0 ? `+${computedDelta}g` : `${computedDelta}g`})
               </span>
             </div>
             {previewServings !== servings ? (
               <div className="mt-0.5 text-[11px] text-[color:var(--text-muted)]">
-                Protein scaled for {previewServings} servings (amounts): {scaledOriginalProtein}g → {scaledTotalProtein}g (
-                {scaledDelta >= 0 ? `+${scaledDelta}g` : `${scaledDelta}g`} delta)
+                Scaled: {scaledOriginalProtein}g → {scaledTotalProtein}g (
+                {scaledDelta >= 0 ? `+${scaledDelta}g` : `${scaledDelta}g`})
               </div>
             ) : null}
           </div>
@@ -332,7 +330,6 @@ function VersionCardLegacy({
                   <IngredientList
                     ingredients={version.ingredients}
                     swapDisabled={swapDisabled}
-                    deltaPerIngredient={deltaPerIngredient}
                     onSwapIngredient={(ingredientId, replacement) =>
                       onSwapIngredient(version.id, ingredientId, replacement)
                     }
@@ -433,8 +430,6 @@ function VersionCardV2({
   const scaledDelta = Math.round(computedDelta * scaleFactor);
   const scaledTotalProtein = Math.round(totalProtein * scaleFactor);
   const showMealPrepNote = servings > 1 && !!version.mealPrepNote;
-  const deltaPerIngredient =
-    version.ingredients.length > 0 ? Math.max(1, Math.round(computedDelta / version.ingredients.length)) : 0;
 
   const mainToggleLabel = expanded ? "Close details" : "See transformation";
 
@@ -470,15 +465,15 @@ function VersionCardV2({
             ) : null}
             <div className="mt-1 text-xs text-[color:var(--text-muted)]">
               <span className="font-semibold text-[color:var(--text-primary)]">Protein per serving:</span>{" "}
-              {originalProtein}g baseline → {totalProtein}g after{" "}
+              {originalProtein}g → {totalProtein}g{" "}
               <span className="font-semibold text-[color:var(--text-primary)]">
-                ({computedDelta >= 0 ? `+${computedDelta}g` : `${computedDelta}g`} delta)
+                ({computedDelta >= 0 ? `+${computedDelta}g` : `${computedDelta}g`})
               </span>
             </div>
             {previewServings !== servings ? (
               <div className="mt-0.5 text-[11px] text-[color:var(--text-muted)]">
-                Protein scaled for {previewServings} servings (amounts): {scaledOriginalProtein}g → {scaledTotalProtein}g (
-                {scaledDelta >= 0 ? `+${scaledDelta}g` : `${scaledDelta}g`} delta)
+                Scaled: {scaledOriginalProtein}g → {scaledTotalProtein}g (
+                {scaledDelta >= 0 ? `+${scaledDelta}g` : `${scaledDelta}g`})
               </div>
             ) : null}
           </div>
@@ -670,7 +665,6 @@ function VersionCardV2({
                           <IngredientList
                             ingredients={version.ingredients}
                             swapDisabled={swapDisabled}
-                            deltaPerIngredient={deltaPerIngredient}
                             onSwapIngredient={(ingredientId, replacement) =>
                               onSwapIngredient(version.id, ingredientId, replacement)
                             }

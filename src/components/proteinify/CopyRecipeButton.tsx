@@ -39,12 +39,12 @@ function buildRecipeText(dishLabel: string, version: RecipeVersion, transformati
   );
   lines.push("");
   const totalP = version.totalProteinG ?? version.macros.p;
-  const baselineP = Math.max(0, version.macros.p - version.macros.d);
-  const deltaP = Math.round(totalP - baselineP);
+  const startProtein = Math.max(0, version.macros.p - version.macros.d);
+  const gainProtein = Math.round(totalP - startProtein);
   lines.push(
-    `Protein per serving: ${baselineP}g baseline → ${totalP}g after (${deltaP >= 0 ? `+${deltaP}g` : `${deltaP}g`} delta).`
+    `Protein per serving: ${startProtein}g → ${totalP}g (${gainProtein >= 0 ? `+${gainProtein}g` : `${gainProtein}g`}).`
   );
-  lines.push("Proteinify shows protein only — not calories, fat, or carbs.");
+  lines.push("Wise Dish shows protein only — not calories, fat, or carbs.");
   lines.push("");
   lines.push("Ingredients (full list):");
   for (const ing of version.ingredients) {
@@ -99,7 +99,7 @@ export default function CopyRecipeButton({ dishLabel, version, transformationMod
           setToastFading(false);
           setToastVisible(true);
         }}
-        className="rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] transition hover:bg-[color:var(--accent-light)] hover:text-[color:var(--accent)]"
+        className="min-h-11 rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] transition hover:bg-[color:var(--accent-light)] hover:text-[color:var(--accent)]"
       >
         Copy recipe
       </button>

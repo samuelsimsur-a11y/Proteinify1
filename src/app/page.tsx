@@ -1,6 +1,6 @@
-import ProteinifyApp from "@/components/proteinify/ProteinifyApp";
+import WiseDishApp from "@/components/proteinify/ProteinifyApp";
 
 export default function Page() {
-  return <ProteinifyApp />;
+  return <WiseDishApp />;
 }
 

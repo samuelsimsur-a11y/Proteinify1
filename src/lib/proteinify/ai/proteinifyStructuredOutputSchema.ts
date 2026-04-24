@@ -181,7 +181,7 @@ export const proteinifyFullResponseFormat: OpenAI.ResponseFormatJSONSchema = {
     name: "proteinify_result",
     strict: true,
     description:
-      "Proteinify full response: inputDish, assumptions, and exactly three versions (close-match, balanced, max-protein) with ingredients, swapOptions, steps, macros.p/d, why, adds.",
+      "Wise Dish full response: inputDish, assumptions, and exactly three versions (close-match, balanced, max-protein) with ingredients, swapOptions, steps, macros.p/d, why, adds.",
     schema: { ...fullRootSchema } as Record<string, unknown>,
   },
 };

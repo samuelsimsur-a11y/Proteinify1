@@ -44,6 +44,8 @@ export default function FeedbackButton({ dish, resultId, version, transformation
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState<"up" | "down">("up");
   const [tag, setTag] = useState<FeedbackTag>("other");
+  const [submitting, setSubmitting] = useState(false);
+  const [statusText, setStatusText] = useState("");
 
   const title = useMemo(
     () => `Feedback for ${displayVersionLabel(version, transformationMode)}`,
@@ -59,13 +61,45 @@ export default function FeedbackButton({ dish, resultId, version, transformation
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
+  const submitFeedback = async () => {
+    setSubmitting(true);
+    setStatusText("");
+    try {
+      const payload = {
+        rating: rating === "up" ? 1 : -1,
+        category: rating === "down" ? tag : "positive",
+        message: "",
+        context: {
+          resultId,
+          dish,
+          version: version.id,
+          transformationMode,
+        },
+      };
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setStatusText("Could not submit feedback right now.");
+        return;
+      }
+      setStatusText("Feedback submitted. Thank you.");
+    } catch {
+      setStatusText("Network issue while submitting feedback.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div>
       <button
         type="button"
         title={title}
         onClick={() => setOpen((v) => !v)}
-        className="rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] transition hover:bg-[color:var(--surface-offset)]"
+      className="min-h-11 rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] transition hover:bg-[color:var(--surface-offset)]"
       >
         Feedback
       </button>
@@ -139,19 +173,11 @@ export default function FeedbackButton({ dish, resultId, version, transformation
 
             <button
               type="button"
-              onClick={() => {
-                const feedbackUrl = buildFeedbackUrl({
-                  resultId,
-                  dish,
-                  versionId: version.id,
-                  rating,
-                  tag: rating === "down" ? tag : undefined,
-                });
-                window.open(feedbackUrl, "_blank", "noopener,noreferrer");
-              }}
+              onClick={submitFeedback}
+              disabled={submitting}
               className="mt-3 w-full rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-offset)] px-3 py-2 text-xs font-semibold text-[color:var(--text-primary)] hover:bg-[color:var(--surface-card)]"
             >
-              Open feedback page
+              {submitting ? "Submitting..." : "Submit feedback"}
             </button>
 
             <button
@@ -171,8 +197,9 @@ export default function FeedbackButton({ dish, resultId, version, transformation
               Copy feedback link
             </button>
             <div className="mt-2 text-[11px] text-[color:var(--text-muted)]">
-              No account needed. Nothing saved, nothing tracked.
+              No account needed.
             </div>
+            {statusText ? <div className="mt-2 text-[11px] text-[color:var(--text-muted)]">{statusText}</div> : null}
           </div>
         </div>
       ) : null}

@@ -6,6 +6,7 @@ import {
 } from "../apiBaseUrl";
 
 export const IMPORT_ENDPOINT = withApiBase("/api/import");
+const IMPORT_TIMEOUT_MS = 45_000;
 
 function getImportEndpointCandidates(): string[] {
   return getApiRequestEndpointCandidates("/api/import");
@@ -13,7 +14,7 @@ function getImportEndpointCandidates(): string[] {
 
 function shouldRetryImport(status: number, hasAnotherCandidate: boolean): boolean {
   if (!hasAnotherCandidate) return false;
-  return status === 401 || status === 403 || status === 404;
+  return status === 408 || status === 429 || status >= 500;
 }
 
 function wait(ms: number): Promise<void> {
@@ -57,34 +58,44 @@ export async function importRecipeFromUrl(url: string): Promise<
   | { ok: false; error: string }
 > {
   try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), IMPORT_TIMEOUT_MS);
     const candidates = getImportEndpointCandidates();
     let res: Response | null = null;
     let endpointUsed = candidates[0] ?? IMPORT_ENDPOINT;
-    for (let i = 0; i < candidates.length; i++) {
-      const endpoint = candidates[i];
-      endpointUsed = endpoint;
-      try {
-        const candidate = await fetchImportWithRetry(
-          endpoint,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url }),
-          },
-          1
-        );
-        const hasAnother = i < candidates.length - 1;
-        if (shouldRetryImport(candidate.status, hasAnother)) {
-          continue;
+    try {
+      for (let i = 0; i < candidates.length; i++) {
+        const endpoint = candidates[i];
+        endpointUsed = endpoint;
+        try {
+          const candidate = await fetchImportWithRetry(
+            endpoint,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url }),
+              signal: ctrl.signal,
+            },
+            1
+          );
+          const hasAnother = i < candidates.length - 1;
+          if (shouldRetryImport(candidate.status, hasAnother)) {
+            continue;
+          }
+          res = candidate;
+          markApiEndpointSuccess(endpoint);
+          break;
+        } catch {
+          // try next endpoint
         }
-        res = candidate;
-        markApiEndpointSuccess(endpoint);
-        break;
-      } catch {
-        // try next endpoint
       }
+    } finally {
+      clearTimeout(timer);
     }
     if (!res) {
+      if (ctrl.signal.aborted) {
+        return { ok: false, error: "Request timed out while importing. Please try again." };
+      }
       if (isLikelyOffline()) {
         return { ok: false, error: "No internet connection detected. Reconnect and try again." };
       }

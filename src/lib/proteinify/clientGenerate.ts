@@ -25,7 +25,7 @@ function getGenerateEndpointCandidates(): string[] {
 
 function isRetryableOriginStatus(status: number, hasAnotherCandidate: boolean): boolean {
   if (!hasAnotherCandidate) return false;
-  return status === 401 || status === 403 || status === 404;
+  return status === 408 || status === 429 || status >= 500;
 }
 
 function wait(ms: number): Promise<void> {
@@ -75,6 +75,17 @@ export type StreamFullOptions = {
   signal?: AbortSignal;
   onVersion?: (index: number, version: RecipeVersion) => void;
 };
+
+export async function generateQuickCloseMatch(
+  body: GenerateApiRequestBody
+): Promise<{ ok: true; version: RecipeVersion } | { ok: false; error: string }> {
+  const baseBody: GenerateApiRequestBody = { ...body, quickCloseMatch: true };
+  const result = await postGenerate(baseBody);
+  if (!result.ok) return { ok: false, error: result.error };
+  const close = result.data.versions.find((v) => v.id === "close-match") ?? result.data.versions[0];
+  if (!close) return { ok: false, error: "Quick close-match was unavailable." };
+  return { ok: true, version: close };
+}
 
 /**
  * Full generate (no `targetVersion`): reads SSE (`version` then `complete`).

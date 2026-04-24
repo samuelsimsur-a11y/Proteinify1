@@ -6,17 +6,21 @@ export function extractYouTubeVideoId(url: string): string | null {
     const host = u.hostname.replace(/^www\./, "").toLowerCase();
 
     if (host === "youtu.be") {
-      const id = u.pathname.split("/").filter(Boolean)[0] ?? "";
+      const id = (u.pathname.split("/").filter(Boolean)[0] ?? "").split("?")[0] ?? "";
       return YOUTUBE_VIDEO_ID_RE.test(id) ? id : null;
     }
 
     if (host === "youtube.com" || host === "m.youtube.com") {
       if (u.pathname === "/watch") {
-        const id = u.searchParams.get("v") ?? "";
+        const id = (u.searchParams.get("v") ?? "").split("&")[0] ?? "";
+        return YOUTUBE_VIDEO_ID_RE.test(id) ? id : null;
+      }
+      if (u.pathname.startsWith("/embed/")) {
+        const id = u.pathname.split("/").filter(Boolean)[1] ?? "";
         return YOUTUBE_VIDEO_ID_RE.test(id) ? id : null;
       }
       if (u.pathname.startsWith("/shorts/")) {
-        const id = u.pathname.split("/").filter(Boolean)[1] ?? "";
+        const id = (u.pathname.split("/").filter(Boolean)[1] ?? "").split("?")[0] ?? "";
         return YOUTUBE_VIDEO_ID_RE.test(id) ? id : null;
       }
     }

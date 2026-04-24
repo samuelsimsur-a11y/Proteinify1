@@ -1,11 +1,11 @@
-export default function WhyProteinify() {
+export default function WhyWiseDish() {
   return (
     <section className="px-4 py-8">
       <div className="mx-auto w-full max-w-3xl">
         <div className="pf-card p-6">
-          <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Why Proteinify</h2>
+          <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Why Wise Dish</h2>
           <p className="mt-3 text-sm leading-relaxed text-[color:var(--text-muted)]">
-            Proteinify upgrades dishes you already love into higher-protein versions you can actually cook. We optimise
+            Wise Dish upgrades dishes you already love into higher-protein versions you can actually cook. We optimise
             for protein — not calories, not macros, not guilt.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">

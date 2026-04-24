@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Preferences } from "@capacitor/preferences";
-import foodzapMark from "@/assets/brand/foodzap-mark.jpg";
 import { isCapacitorNative } from "@/lib/capacitorEnv";
+import { getAppRouteHref } from "@/lib/navigation/appRoutes";
 import { RECIPE_LOG_EVENT, getSavedRecipes, initRecipeLogNativeStorage } from "@/lib/recipeLog";
 
-const THEME_KEY = "foodzap-theme";
+const THEME_KEY = "wisedish-theme";
 
 function SunIcon() {
   return (
@@ -30,37 +30,21 @@ function MoonIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
-        d="M21 12.7A8.5 8.5 0 0 1 11.3 3a6.8 6.8 0 1 0 9.7 9.7Z"
+        d="M20.25 15.5A8.5 8.5 0 1 1 12.5 3.75a6.75 6.75 0 1 0 7.75 11.75Z"
         stroke="currentColor"
         strokeWidth="2"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>
   );
 }
 
-/** Bundled under `/_next/static/media/*` so the mark works even when `public/` URLs 404 (mis-rooted deploys). */
-const MARK_SRC = `${foodzapMark.src}?v=${encodeURIComponent(process.env.NEXT_PUBLIC_FOODZAP_BUILD_ID ?? "1")}`;
-
-/** Brand mark: fork + lightning (asset matches tile `#121212`; no white matting). */
-function FoodZapLogo() {
+/** Brand mark uses uploaded Wise Dish wordmark. */
+function WiseDishLogo() {
   return (
-    <div className="flex min-w-[132px] flex-nowrap items-center gap-2 sm:min-w-[156px] sm:gap-2.5">
-      <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-[#121212] sm:h-10 sm:w-10">
-        <img
-          src={MARK_SRC}
-          alt=""
-          width={80}
-          height={80}
-          decoding="async"
-          className="h-full w-full object-cover object-center"
-        />
-      </div>
-      <div className="min-w-0 leading-none">
-        <div className="font-display whitespace-nowrap text-[15px] font-extrabold tracking-tight text-[color:var(--accent)] sm:text-base">
-          FoodZap
-        </div>
-      </div>
+    <div className="flex min-w-[188px] flex-nowrap items-center sm:min-w-[218px]">
+      <img src="/logo.png" alt="Wise Dish" className="h-[42px] w-auto object-contain object-left" />
     </div>
   );
 }
@@ -165,6 +149,13 @@ export default function Header() {
     }
   };
 
+  const homeHref = getAppRouteHref("home");
+  const logHref = getAppRouteHref("log");
+
+  const goToLog = () => {
+    window.location.assign(logHref);
+  };
+
   return (
     <header
       className={[
@@ -178,21 +169,22 @@ export default function Header() {
           scrolled ? "border-b border-[color:var(--divider)]" : "border-b border-transparent",
         ].join(" ")}
       >
-        <a href="/" className="flex min-w-0 flex-1 items-center pr-1" aria-label="FoodZap home">
-          <FoodZapLogo />
+        <a href={homeHref} className="flex min-w-0 flex-1 items-center pr-1" aria-label="Wise Dish home">
+          <WiseDishLogo />
         </a>
 
         <div className="flex shrink-0 flex-nowrap items-center gap-1.5 sm:gap-3">
           <a href="#how-it-works" className="hidden text-xs font-semibold text-[color:var(--text-muted)] md:block">
             How it works
           </a>
-          <a
-            href="/log"
+          <button
+            type="button"
+            onClick={goToLog}
             aria-label={savedCount > 0 ? `My recipes, ${savedCount} saved` : "My recipes"}
             className={[
               "relative z-10 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[var(--radius-pill)] border px-2.5 sm:h-11 sm:px-3.5",
               "whitespace-nowrap bg-[color:var(--surface-offset)] text-[color:var(--accent)]",
-              "border-[color:rgba(232,113,10,0.45)] hover:border-[color:var(--accent)]",
+              "border-[color:rgba(200,170,106,0.45)] hover:border-[color:var(--accent)]",
             ].join(" ")}
           >
             <BookmarkRecipesIcon />
@@ -202,7 +194,7 @@ export default function Header() {
                 {savedCount > 9 ? "9+" : savedCount}
               </span>
             ) : null}
-          </a>
+          </button>
 
           <button
             type="button"
@@ -210,7 +202,7 @@ export default function Header() {
             aria-label="Toggle dark mode"
             className={[
               "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border",
-              "border-[color:rgba(232,113,10,0.35)] bg-[color:var(--surface-card)] text-[color:var(--text-muted)]",
+              "border-[color:rgba(30,48,71,0.24)] bg-[color:var(--surface-card)] text-[color:var(--text-muted)]",
               "hover:border-[color:var(--accent)]",
             ].join(" ")}
           >

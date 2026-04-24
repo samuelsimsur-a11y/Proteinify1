@@ -23,7 +23,7 @@ export default function IngredientSwapMenu({ ingredient, disabled, onSwap }: Pro
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={[
-          "rounded-xl border px-3 py-1.5 text-xs font-semibold transition",
+          "min-h-11 rounded-xl border px-3 py-1.5 text-xs font-semibold transition",
           "border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[color:var(--text-muted)]",
           "hover:bg-[color:var(--accent-light)] hover:text-[color:var(--accent)]",
           "disabled:cursor-not-allowed disabled:opacity-50",
@@ -39,7 +39,7 @@ export default function IngredientSwapMenu({ ingredient, disabled, onSwap }: Pro
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-xs text-[color:var(--text-muted)]"
+              className="min-h-11 px-2 text-xs text-[color:var(--text-muted)]"
             >
               Close
             </button>

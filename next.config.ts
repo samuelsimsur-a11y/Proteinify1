@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { API_CORS_HEADERS } from "./src/lib/http/cors";
 
 /**
  * Static HTML export (writes `out/`) — no `/api/*` routes. Use only for Capacitor `webDir` sync
@@ -8,6 +9,13 @@ import type { NextConfig } from "next";
  * Local: `FOODZAP_STATIC_EXPORT=true npm run build && npx cap sync android`
  */
 const staticExport = process.env.FOODZAP_STATIC_EXPORT === "true";
+const onVercel = process.env.VERCEL === "1";
+
+if (staticExport && onVercel) {
+  throw new Error(
+    "FOODZAP_STATIC_EXPORT=true is only for local Android sync. Disable it for Vercel/serverful deployments."
+  );
+}
 
 /** Changes every Vercel deploy so the client can bust stale WebView caches. */
 const FOODZAP_BUILD_ID =
@@ -27,12 +35,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        headers: [
-          { key: "Access-Control-Allow-Origin", value: "*" },
-          { key: "Access-Control-Allow-Methods", value: "GET,POST,OPTIONS" },
-          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, X-Requested-With" },
-          { key: "Access-Control-Max-Age", value: "86400" },
-        ],
+        headers: Object.entries(API_CORS_HEADERS).map(([key, value]) => ({ key, value })),
       },
       {
         source: "/",

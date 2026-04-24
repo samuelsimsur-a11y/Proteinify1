@@ -7,10 +7,9 @@ type Props = {
   ingredients: Ingredient[];
   swapDisabled?: boolean;
   onSwapIngredient: (ingredientId: string, replacement: string) => void;
-  deltaPerIngredient?: number;
 };
 
-export default function IngredientList({ ingredients, swapDisabled, onSwapIngredient, deltaPerIngredient }: Props) {
+export default function IngredientList({ ingredients, swapDisabled, onSwapIngredient }: Props) {
   return (
     <div className="space-y-3">
       {ingredients.map((ing) => (
@@ -18,7 +17,6 @@ export default function IngredientList({ ingredients, swapDisabled, onSwapIngred
           key={ing.id}
           ingredient={ing}
           swapDisabled={swapDisabled}
-          deltaPerIngredient={deltaPerIngredient}
           onSwap={(replacement) => onSwapIngredient(ing.id, replacement)}
         />
       ))}

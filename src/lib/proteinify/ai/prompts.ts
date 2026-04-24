@@ -745,7 +745,7 @@ function hasAnyOverrides(obv: GenerateApiRequestBody["overridesByVersion"] | und
 export function buildFullGeneratePrompt(body: GenerateApiRequestBody): { system: string; user: string } {
   const tmode = body.transformationMode ?? "proteinify";
   const thirdLabel = thirdVersionLabel(tmode);
-  const modeName = tmode === "lean" ? "Lean" : "Proteinify";
+  const modeName = tmode === "lean" ? "Lean" : "Wise Dish";
   const addVeggies = body.addVeggies === true;
 
   const system =
@@ -772,7 +772,7 @@ export function buildSingleVersionRegeneratePrompt(
 ): { system: string; user: string } {
   const tmode = body.transformationMode ?? "proteinify";
   const thirdLabel = thirdVersionLabel(tmode);
-  const modeName = tmode === "lean" ? "Lean" : "Proteinify";
+  const modeName = tmode === "lean" ? "Lean" : "Wise Dish";
   const addVeggies = body.addVeggies === true;
 
   const system =

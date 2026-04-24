@@ -1,19 +1,32 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   IngredientOverride,
   ProteinifyResponse,
   RecipeVersion,
   SliderValues,
 } from "@/lib/proteinify/types";
-import { postGenerate, streamGenerateFull } from "@/lib/proteinify/clientGenerate";
+import { generateQuickCloseMatch, postGenerate, streamGenerateFull } from "@/lib/proteinify/clientGenerate";
+import { GENERATE_ENDPOINT } from "@/lib/proteinify/clientGenerate";
 import { importRecipeFromUrl } from "@/lib/import/clientImport";
+import { IMPORT_ENDPOINT } from "@/lib/import/clientImport";
+import {
+  deleteRecipe,
+  getLatestSavedRecipeByDishMode,
+  getSavedRecipe,
+  getSavedRecipes,
+  initRecipeLogNativeStorage,
+  saveRecipe,
+  takeSelectedRecipeId,
+  type SavedRecipe,
+} from "@/lib/recipeLog";
+import { getApiRequestEndpointCandidates, getResolvedApiBase } from "@/lib/apiBaseUrl";
 import HeroSection from "./HeroSection";
 import InputLab from "./InputLab";
 import ResultsPreview from "./ResultsPreview";
 import HowItWorks from "./HowItWorks";
-import WhyProteinify from "./WhyProteinify";
+import WhyWiseDish from "./WhyProteinify";
 import type { ModeId } from "./InputLab";
 
 const EXAMPLE_CHIPS = [
@@ -40,6 +53,9 @@ const DEFAULT_SLIDERS: SliderValues = {
 };
 
 const DEFAULT_DISH = "mac and cheese";
+const PERF_KEY = "wisedish_generate_perf_samples_v1";
+const LEGACY_PERF_KEY = "foodzap_generate_perf_samples_v1";
+const MAX_PERF_SAMPLES = 40;
 
 function emptyOverrides(): Record<VersionId, IngredientOverride[]> {
   return {
@@ -47,6 +63,43 @@ function emptyOverrides(): Record<VersionId, IngredientOverride[]> {
     balanced: [],
     "max-protein": [],
   };
+}
+
+type PerfSample = {
+  at: number;
+  dish: string;
+  cacheHit: boolean;
+  quickMs?: number;
+  fullMs?: number;
+};
+
+function readPerfSamples(): PerfSample[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PERF_KEY) ?? window.localStorage.getItem(LEGACY_PERF_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x) => x && typeof x === "object") as PerfSample[];
+  } catch {
+    return [];
+  }
+}
+
+function writePerfSamples(samples: PerfSample[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PERF_KEY, JSON.stringify(samples.slice(-MAX_PERF_SAMPLES)));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.max(0, Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[idx] ?? 0;
 }
 
 function toApiOverrides(o: Record<VersionId, IngredientOverride[]>) {
@@ -166,7 +219,17 @@ function buildFastCloseMatchDraft(dish: string): RecipeVersion {
   };
 }
 
-export default function ProteinifyApp() {
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return await Promise.race([
+    p,
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), ms);
+    }),
+  ]);
+}
+
+export default function WiseDishApp() {
+  const showDebugOverlay = process.env.NODE_ENV !== "production";
   const [mode, setMode] = useState<ModeId>("proteinify");
   const [addVeggies, setAddVeggies] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -198,6 +261,18 @@ export default function ProteinifyApp() {
   const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [regeneratingVersionId, setRegeneratingVersionId] = useState<VersionId | null>(null);
+  const [isRefreshingFromCache, setIsRefreshingFromCache] = useState(false);
+  const [fromCache, setFromCache] = useState(false);
+  const [cachedRecipeMeta, setCachedRecipeMeta] = useState<{ id: string; displayName: string; savedServings: number } | null>(
+    null
+  );
+  const [perfSummary, setPerfSummary] = useState<{
+    lastQuickMs?: number;
+    lastFullMs?: number;
+    p50Ms?: number;
+    p95Ms?: number;
+    samples: number;
+  } | null>(null);
 
   /** Bumped on mode change so in-flight generates don’t repopulate stale results. */
   const resultsGenerationKey = useRef(0);
@@ -210,12 +285,115 @@ export default function ProteinifyApp() {
   };
 
   const thirdVersionLabel = mode === "lean" ? "Fully Light" : "Full Send";
+  const resolvedApiBase =
+    getResolvedApiBase() || (typeof window !== "undefined" ? window.location.origin : "(unknown)");
+  const generateEndpoints =
+    typeof window !== "undefined" ? getApiRequestEndpointCandidates("/api/generate") : [];
+  const importEndpoints =
+    typeof window !== "undefined" ? getApiRequestEndpointCandidates("/api/import") : [];
+  const sliderKey = JSON.stringify({
+    tasteIntegrity: sliders.tasteIntegrity,
+    proteinBoost: sliders.proteinBoost,
+    pantryRealism: sliders.pantryRealism,
+  });
+
+  useEffect(() => {
+    void (async () => {
+      await initRecipeLogNativeStorage();
+      const selectedId = takeSelectedRecipeId();
+      if (!selectedId) return;
+      const selected = getSavedRecipes().find((r) => r.id === selectedId);
+      if (!selected) return;
+      setInputDish(selected.displayName);
+      setMode(selected.mode as ModeId);
+      const parsed = JSON.parse(selected.sliderKey ?? "{}") as Partial<SliderValues>;
+      if (
+        typeof parsed.tasteIntegrity === "number" &&
+        typeof parsed.proteinBoost === "number" &&
+        typeof parsed.pantryRealism === "number"
+      ) {
+        setSliders({
+          tasteIntegrity: parsed.tasteIntegrity,
+          proteinBoost: parsed.proteinBoost,
+          pantryRealism: parsed.pantryRealism,
+        });
+      }
+      setResponse({
+        inputDish: selected.displayName,
+        assumptions: [],
+        versions: selected.versions as [RecipeVersion, RecipeVersion, RecipeVersion],
+      });
+      setPreviewServings(servings);
+      setFromCache(true);
+      setCachedRecipeMeta({ id: selected.id, displayName: selected.displayName, savedServings: selected.servings });
+    })();
+  }, [servings]);
 
   const onChangeSlider = <K extends keyof SliderValues>(key: K, value: number) => {
     setSliders((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleGenerateAll = async () => {
+  const applySavedRecipeToView = (saved: SavedRecipe, targetDish?: string) => {
+    setResponse({
+      inputDish: saved.displayName,
+      assumptions: [],
+      versions: saved.versions as [RecipeVersion, RecipeVersion, RecipeVersion],
+    });
+    setPreviewServings(servings);
+    setFromCache(true);
+    setCachedRecipeMeta({ id: saved.id, displayName: saved.displayName, savedServings: saved.servings });
+    setError(null);
+    setImportContext(null);
+    setStreamingVersions(null);
+    if (targetDish) setInputDish(targetDish);
+  };
+
+  const recordPerf = (sample: PerfSample) => {
+    const samples = [...readPerfSamples(), sample].slice(-MAX_PERF_SAMPLES);
+    writePerfSamples(samples);
+    const fullValues = samples
+      .map((s) => s.fullMs)
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
+    setPerfSummary({
+      lastQuickMs: sample.quickMs,
+      lastFullMs: sample.fullMs,
+      p50Ms: fullValues.length ? percentile(fullValues, 50) : undefined,
+      p95Ms: fullValues.length ? percentile(fullValues, 95) : undefined,
+      samples: fullValues.length,
+    });
+  };
+
+  useEffect(() => {
+    const samples = readPerfSamples();
+    const fullValues = samples
+      .map((s) => s.fullMs)
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
+    if (fullValues.length === 0) return;
+    const last = samples[samples.length - 1];
+    setPerfSummary({
+      lastQuickMs: last?.quickMs,
+      lastFullMs: last?.fullMs,
+      p50Ms: percentile(fullValues, 50),
+      p95Ms: percentile(fullValues, 95),
+      samples: fullValues.length,
+    });
+  }, []);
+
+  const handleGenerateAll = async (forceFresh: boolean = false) => {
+    const perfStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+    let quickElapsedMs: number | undefined;
+    const normalised = inputDish.trim().toLowerCase();
+    if (!forceFresh && !isUrl(inputDish) && normalised) {
+      const existing =
+        getSavedRecipe(normalised, mode, sliderKey) ?? getLatestSavedRecipeByDishMode(normalised, mode);
+      if (existing) {
+        applySavedRecipeToView(existing, normalised);
+        recordPerf({ at: Date.now(), dish: normalised, cacheHit: true });
+        return;
+      }
+    }
+    setFromCache(false);
+    setCachedRecipeMeta(null);
     resultsGenerationKey.current += 1;
     const genKey = resultsGenerationKey.current;
     setIsGenerating(true);
@@ -272,6 +450,32 @@ export default function ProteinifyApp() {
     } else {
       setImportContext(null);
     }
+    const quickStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const quickClose = await withTimeout(
+      generateQuickCloseMatch({
+        dish: dishForGenerate,
+        servings,
+        sliders,
+        overridesByVersion: toApiOverrides(emptyOverrides()),
+        transformationMode: mode,
+        addVeggies,
+        importedRecipe,
+      }),
+              12_000
+    );
+    if (quickClose?.ok) {
+      const quickDone = typeof performance !== "undefined" ? performance.now() : Date.now();
+      quickElapsedMs = Math.max(0, quickDone - quickStart);
+      setStreamingVersions((prev) => {
+        const base: [RecipeVersion | null, RecipeVersion | null, RecipeVersion | null] = prev ?? [null, null, null];
+        return [quickClose.version, base[1], base[2]];
+      });
+      setPerfSummary((prev) => ({
+        ...(prev ?? { samples: 0 }),
+        lastQuickMs: quickElapsedMs,
+      }));
+    }
+
     const r = await streamGenerateFull(
       {
         dish: dishForGenerate,
@@ -305,6 +509,29 @@ export default function ProteinifyApp() {
     }
     if (r.ok) {
       setResponse(r.data);
+      const now = Date.now();
+      const source: SavedRecipe["source"] = importedRecipe?.source ?? "typed";
+      const dishNormalized = dishForGenerate.trim().toLowerCase();
+      saveRecipe({
+        id: `${dishNormalized}_${mode}_${now}`,
+        dishName: dishNormalized,
+        displayName: r.data.inputDish || dishForGenerate,
+        mode,
+        servings,
+        savedAt: now,
+        versions: r.data.versions,
+        tagline: "Three versions. Pick your trade-off.",
+        source,
+        sliderKey,
+      });
+      const perfDone = typeof performance !== "undefined" ? performance.now() : Date.now();
+      recordPerf({
+        at: Date.now(),
+        dish: dishForGenerate.trim().toLowerCase(),
+        cacheHit: false,
+        quickMs: quickElapsedMs,
+        fullMs: Math.max(0, perfDone - perfStart),
+      });
     } else {
       setError(r.error);
     }
@@ -352,6 +579,19 @@ export default function ProteinifyApp() {
         setResponse(r.data);
         setPreviewServings(servings);
         setResultId(createResultId());
+        const now = Date.now();
+        saveRecipe({
+          id: `${inputDish.trim().toLowerCase()}_${mode}_${now}`,
+          dishName: inputDish.trim().toLowerCase(),
+          displayName: r.data.inputDish || inputDish,
+          mode,
+          servings,
+          savedAt: now,
+          versions: r.data.versions,
+          tagline: "Three versions. Pick your trade-off.",
+          source: importContext?.source ?? "typed",
+          sliderKey,
+        });
       } else {
         setError(r.error);
       }
@@ -360,7 +600,14 @@ export default function ProteinifyApp() {
   };
 
   const onPickExample = (dish: string) => {
-    setInputDish(dish.toLowerCase());
+    const normalizedDish = dish.toLowerCase();
+    const saved = getLatestSavedRecipeByDishMode(normalizedDish, mode);
+    if (saved) {
+      // Keep current fine-tune sliders untouched; only swap visible recipe result.
+      applySavedRecipeToView(saved, normalizedDish);
+      return;
+    }
+    setInputDish(normalizedDish);
   };
 
   const handleRetryAfterError = async () => {
@@ -441,6 +688,8 @@ export default function ProteinifyApp() {
           setRegeneratingVersionId(null);
           setIsGenerating(false);
           setIsInitialLoading(false);
+          setFromCache(false);
+          setCachedRecipeMeta(null);
         }}
         addVeggies={addVeggies}
         onAddVeggiesChange={setAddVeggies}
@@ -456,6 +705,15 @@ export default function ProteinifyApp() {
       />
 
       <div className="mt-2">
+        {showDebugOverlay && (error || perfSummary) ? (
+          <div className="mx-auto mb-2 w-full max-w-3xl px-4 text-[11px] text-[color:var(--text-muted)]">
+            Debug: base={resolvedApiBase} | generate→{generateEndpoints.join(" → ") || GENERATE_ENDPOINT} |
+            import→{importEndpoints.join(" → ") || IMPORT_ENDPOINT}
+            {perfSummary
+              ? ` | perf lastQuick=${perfSummary.lastQuickMs ? `${(perfSummary.lastQuickMs / 1000).toFixed(1)}s` : "n/a"} lastFull=${perfSummary.lastFullMs ? `${(perfSummary.lastFullMs / 1000).toFixed(1)}s` : "n/a"} p50=${perfSummary.p50Ms ? `${(perfSummary.p50Ms / 1000).toFixed(1)}s` : "n/a"} p95=${perfSummary.p95Ms ? `${(perfSummary.p95Ms / 1000).toFixed(1)}s` : "n/a"} n=${perfSummary.samples}`
+              : ""}
+          </div>
+        ) : null}
         <ResultsPreview
           response={response}
           streamingVersions={streamingVersions}
@@ -479,13 +737,33 @@ export default function ProteinifyApp() {
           isGenerating={isGenerating}
           regeneratingVersionId={regeneratingVersionId}
           onSwapIngredient={handleSwapIngredient}
-          onRegenerateAll={() => void handleGenerateAll()}
+          cacheNotice={
+            fromCache && cachedRecipeMeta
+              ? {
+                  title: `Showing your saved ${cachedRecipeMeta.displayName} transformation`,
+                  subtitle:
+                    cachedRecipeMeta.savedServings !== servings
+                      ? `Showing saved transformation scaled to ${servings} servings`
+                      : undefined,
+                  actionLabel: "Regenerate ↺",
+                  actionDisabled: isRefreshingFromCache || isGenerating || isInitialLoading,
+                  onAction: () => {
+                    setIsRefreshingFromCache(true);
+                    deleteRecipe(cachedRecipeMeta.id);
+                    setFromCache(false);
+                    setCachedRecipeMeta(null);
+                    void handleGenerateAll(true).finally(() => setIsRefreshingFromCache(false));
+                  },
+                }
+              : null
+          }
+          onRegenerateAll={() => void handleGenerateAll(true)}
           onRetry={handleRetryAfterError}
         />
       </div>
 
       <HowItWorks />
-      <WhyProteinify />
+      <WhyWiseDish />
     </div>
   );
 }

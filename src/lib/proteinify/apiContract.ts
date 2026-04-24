@@ -14,6 +14,8 @@ export type ImportedRecipeContext = {
 export type GenerateApiRequestBody = {
   dish: string;
   sliders: SliderValues;
+  /** Fast pass: prioritize a high-quality Close Match first. */
+  quickCloseMatch?: boolean;
   servings?: 1 | 2 | 4 | 6 | 8;
   /**
    * Transformation mode selected by the user (verb buttons).

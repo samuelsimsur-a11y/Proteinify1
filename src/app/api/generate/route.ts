@@ -5,13 +5,73 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
+import { getServerEnv } from "@/lib/config/env";
 import { checkGenerateRateLimit, getClientIp } from "@/lib/rateLimit/generateRouteRateLimit";
 import { getDishByIdOrAlias, validateDILIntegrity } from "@/lib/culinary/dil/loader";
 import { getProteinifySchema } from "@/lib/culinary/dil/loadProteinifySchema";
 import { patchCompactProteinifySchema } from "@/lib/proteinify/ai/compactSchemaPatch";
 import { validateSwap } from "@/lib/culinary/dil/validator";
 import { buildSystemPrompt, type Mode } from "@/lib/culinary/systemPrompt";
+import { API_CORS_HEADERS, withCorsHeaders } from "@/lib/http/cors";
 import type { SwapInput, UserGoal, ValidationResult } from "@/lib/culinary/dil/schemas";
+
+const OPENAI_TIMEOUT_MS = 90_000;
+const OPENAI_MAX_ATTEMPTS = 2;
+
+function requestIdFrom(req: NextRequest): string {
+  return req.headers.get("x-request-id")?.trim() || crypto.randomUUID();
+}
+
+function jsonResponse(body: unknown, requestId: string, init?: ResponseInit): NextResponse {
+  return NextResponse.json(body, {
+    ...init,
+    headers: withCorsHeaders({ "X-Request-Id": requestId, ...(init?.headers ?? {}) }),
+  });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: API_CORS_HEADERS,
+  });
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableOpenAiError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const status = (error as { status?: unknown }).status;
+  if (typeof status === "number") {
+    return status === 429 || status >= 500;
+  }
+  const message = error.message.toLowerCase();
+  return message.includes("timeout") || message.includes("econnreset") || message.includes("network");
+}
+
+async function createCompletionWithRetry(
+  payload: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), OPENAI_TIMEOUT_MS);
+    try {
+      return await getOpenAI().chat.completions.create(payload, { signal: ctrl.signal });
+    } catch (error) {
+      lastError = error;
+      const aborted = ctrl.signal.aborted;
+      const retryable = isRetryableOpenAiError(error) || aborted;
+      const hasNext = attempt < OPENAI_MAX_ATTEMPTS;
+      if (!retryable || !hasNext) break;
+      await sleep(300 * attempt);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("OpenAI request failed");
+}
 
 // ─── Integrity check once at cold start ──────────────────────────────────────
 let integrityChecked = false;
@@ -45,7 +105,10 @@ const CACHE_SCHEMA_VERSION = "v2.9-cook-time-difficulty";
 const responseCache = new Map<string, { expiresAt: number; value: GenerateResponse }>();
 const inflightRequests = new Map<string, Promise<GenerateResponse>>();
 // sharedRecipe + 3 tiers still needs headroom; truncation yields invalid JSON and 502s.
-const MAX_COMPLETION_TOKENS = 14000;
+const MAX_COMPLETION_TOKENS = 12000;
+const QUICK_CLOSE_MAX_TOKENS = 3200;
+const DEFAULT_FULL_MODEL = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
+const DEFAULT_QUICK_MODEL = process.env.OPENAI_QUICK_MODEL?.trim() || "gpt-4.1-mini";
 
 /**
  * Extract the first complete top-level JSON object by brace depth (string-aware).
@@ -140,6 +203,7 @@ function buildCacheKey(input: {
   userGoal?: UserGoal;
   sliders?: GenerateRequest["sliders"];
   importedRecipe?: GenerateRequest["importedRecipe"];
+  quickCloseMatch?: boolean;
 }): string {
   const sliderPart = JSON.stringify({
     // Bucket sliders to improve cache reuse for near-identical requests.
@@ -150,6 +214,7 @@ function buildCacheKey(input: {
   });
   return JSON.stringify({
     v: CACHE_SCHEMA_VERSION,
+    kind: input.quickCloseMatch ? "quick" : "full",
     dish: input.dish.trim().toLowerCase(),
     mode: input.mode,
     servings: input.servings,
@@ -189,6 +254,7 @@ interface GenerateRequest {
   dish: string;
   mode?: Mode;
   transformationMode?: Mode;
+  quickCloseMatch?: boolean;
   servings?: number;        // NEW — default 1, max 12
   userGoal?: UserGoal;
   sliders?: {
@@ -490,8 +556,24 @@ function buildUserMessage(
   dishInput: string,
   mode: Mode,
   servings: number,
-  sliders?: GenerateRequest["sliders"]
+  sliders?: GenerateRequest["sliders"],
+  opts?: { quick?: boolean }
 ): string {
+  if (opts?.quick) {
+    const quickLines = [
+      `Transform: ${dishInput}`,
+      `Mode: ${mode}`,
+      `Servings: ${servings}`,
+    ];
+    if (sliders?.flavorPreservation !== undefined) quickLines.push(`Flavor: ${sliders.flavorPreservation}/100`);
+    if (sliders?.proteinAggression !== undefined) quickLines.push(`Protein: ${sliders.proteinAggression}/100`);
+    if (sliders?.ingredientRealism !== undefined) quickLines.push(`Realism: ${sliders.ingredientRealism}/100`);
+    quickLines.push(
+      "Return valid schema JSON with one strong Close Match first. Keep all tiers fully coherent and culinary-real, not shorthand."
+    );
+    return quickLines.join("\n");
+  }
+
   const lines = [
     `Transform: ${dishInput}`,
     `Mode: ${mode}`,
@@ -579,12 +661,20 @@ function buildUserMessage(
       "Use developed base language (marinade, birista, layered rice, dum finish) rather than generic 'stock/broth' wording."
     );
   }
+  if (dishLower.includes("mac") && dishLower.includes("cheese")) {
+    lines.push(
+      "MAC & CHEESE QUALITY RULE: keep a true cheese sauce identity and include at least one realistic lighter-cheese path " +
+        "across tiers (e.g., full-fat cheddar -> reduced-fat cheddar, or a reduced-fat + fat-free cheddar/mozzarella blend). " +
+        "Do not replace all cheese with non-cheese substitutes."
+    );
+  }
 
   return lines.join("\n");
 }
 
 // ─── POST handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  const requestId = requestIdFrom(req);
   const ip = getClientIp(req);
   const limited = checkGenerateRateLimit(ip);
   if (!limited.ok) {
@@ -593,15 +683,22 @@ export async function POST(req: NextRequest) {
     } else {
       console.warn(`[ratelimit] IP=${ip} hit daily limit`);
     }
-    return NextResponse.json(
-      { error: "Too many requests — try again in a few minutes." },
+    return jsonResponse(
+      { error: "Too many requests — try again in a few minutes.", code: "RATE_LIMITED" },
+      requestId,
       { status: 429 }
     );
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  try {
+    getServerEnv();
+  } catch (err) {
     console.error("[generate] OPENAI_API_KEY is not set");
-    return NextResponse.json({ error: "API key not configured" }, { status: 500 });
+    return jsonResponse(
+      { error: err instanceof Error ? err.message : "API key not configured", code: "SERVER_ENV_INVALID" },
+      requestId,
+      { status: 500 }
+    );
   }
 
   try {
@@ -612,6 +709,7 @@ export async function POST(req: NextRequest) {
       dish: dishInput,
       mode: requestMode,
       transformationMode,
+      quickCloseMatch,
       servings: rawServings,
       userGoal,
       sliders,
@@ -621,7 +719,7 @@ export async function POST(req: NextRequest) {
     const mode = requestMode ?? transformationMode ?? "proteinify";
 
     if (!dishInput || !mode) {
-      return NextResponse.json({ error: "dish and mode are required" }, { status: 400 });
+      return jsonResponse({ error: "dish and mode are required", code: "INVALID_REQUEST" }, requestId, { status: 400 });
     }
 
     // Clamp servings to a sensible range
@@ -633,16 +731,22 @@ export async function POST(req: NextRequest) {
       userGoal,
       sliders,
       importedRecipe,
+      quickCloseMatch: Boolean(quickCloseMatch),
     });
-    const cached = getCachedResponse(cacheKey);
-    if (cached) {
-      return NextResponse.json(cached, { headers: { "x-generate-cache": "hit" } });
+    const shouldUseCache = !quickCloseMatch;
+    if (shouldUseCache) {
+      const cached = getCachedResponse(cacheKey);
+      if (cached) {
+        return jsonResponse(cached, requestId, { headers: { "x-generate-cache": "hit" } });
+      }
     }
 
-    const existingInflight = inflightRequests.get(cacheKey);
-    if (existingInflight) {
-      const shared = await existingInflight;
-      return NextResponse.json(shared, { headers: { "x-generate-cache": "shared-inflight" } });
+    if (shouldUseCache) {
+      const existingInflight = inflightRequests.get(cacheKey);
+      if (existingInflight) {
+        const shared = await existingInflight;
+        return jsonResponse(shared, requestId, { headers: { "x-generate-cache": "shared-inflight" } });
+      }
     }
 
     // ── DIL lookup ────────────────────────────────────────────────────────────
@@ -656,22 +760,35 @@ export async function POST(req: NextRequest) {
     const systemPrompt = buildSystemPrompt(mode, dilDish, servings, importedRecipe);
 
     const generationPromise = (async (): Promise<GenerateResponse> => {
+      const model = quickCloseMatch ? DEFAULT_QUICK_MODEL : DEFAULT_FULL_MODEL;
+      const maxTokens = quickCloseMatch ? QUICK_CLOSE_MAX_TOKENS : MAX_COMPLETION_TOKENS;
+      const openAiStartedAt = Date.now();
       // ── OpenAI call ─────────────────────────────────────────────────────────
       const proteinifySchema = patchCompactProteinifySchema(getProteinifySchema());
-      const completion = await getOpenAI().chat.completions.create({
-        model: "gpt-4.1-mini",
+      const completion = await createCompletionWithRetry({
+        model,
         response_format: {
           type: "json_schema",
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           json_schema: proteinifySchema as any,
         },
         messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: buildUserMessage(dishInput, mode, servings, sliders) },
+          {
+            role: "system",
+            content:
+              systemPrompt +
+              (quickCloseMatch
+                ? "\nFAST CLOSE MATCH MODE: prioritize close-match quality and culinary realism. Keep all tier outputs specific, complete, and cook-credible."
+                : ""),
+          },
+          { role: "user", content: buildUserMessage(dishInput, mode, servings, sliders, { quick: Boolean(quickCloseMatch) }) },
         ],
         temperature: 0.35,
-        max_completion_tokens: MAX_COMPLETION_TOKENS,
+        max_completion_tokens: maxTokens,
       });
+      console.info(
+        `[generate:perf] requestId=${requestId} quick=${Boolean(quickCloseMatch)} model=${model} openai_ms=${Date.now() - openAiStartedAt}`
+      );
 
       const choice = completion.choices[0];
       const raw = choice?.message?.content;
@@ -681,7 +798,7 @@ export async function POST(req: NextRequest) {
       const finishReason = choice?.finish_reason ?? null;
       if (finishReason === "length") {
         console.warn(
-          `[generate] completion truncated at max_completion_tokens=${MAX_COMPLETION_TOKENS} — consider shortening prompt or raising cap`
+          `[generate] completion truncated at max_completion_tokens=${maxTokens} — consider shortening prompt or raising cap`
         );
       }
 
@@ -745,23 +862,23 @@ export async function POST(req: NextRequest) {
         versions: versionsWithValidation,
       };
 
-      setCachedResponse(cacheKey, response);
+      if (shouldUseCache) setCachedResponse(cacheKey, response);
       return response;
     })();
 
-    inflightRequests.set(cacheKey, generationPromise);
+    if (shouldUseCache) inflightRequests.set(cacheKey, generationPromise);
     try {
       const response = await generationPromise;
-      return NextResponse.json(response);
+      return jsonResponse(response, requestId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Internal server error";
       const status = message.includes("parse") || message.includes("empty response") ? 502 : 500;
-      return NextResponse.json({ error: message }, { status });
+      return jsonResponse({ error: message, code: "GENERATE_FAILED" }, requestId, { status });
     } finally {
-      inflightRequests.delete(cacheKey);
+      if (shouldUseCache) inflightRequests.delete(cacheKey);
     }
   } catch (err) {
     console.error("[generate] unhandled error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return jsonResponse({ error: "Internal server error", code: "INTERNAL_ERROR" }, requestId, { status: 500 });
   }
 }

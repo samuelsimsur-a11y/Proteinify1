@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { SliderValues } from "@/lib/proteinify/types";
 import SliderControl from "./SliderControl";
 import ExampleChips from "./ExampleChips";
@@ -46,19 +47,55 @@ export default function InputLab({
   isImporting,
   disabled,
 }: Props) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [sourceHint, setSourceHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sourceHint) return;
+    const t = window.setTimeout(() => setSourceHint(null), 2200);
+    return () => window.clearTimeout(t);
+  }, [sourceHint]);
+
+  const tryPasteUrlFromClipboard = async (source: "tiktok" | "youtube") => {
+    inputRef.current?.focus();
+    const sourceLabel = source === "tiktok" ? "TikTok" : "YouTube";
+    const matcher =
+      source === "tiktok"
+        ? /(https?:\/\/[^\s]*tiktok\.com[^\s]*)/i
+        : /(https?:\/\/[^\s]*(youtube\.com|youtu\.be)[^\s]*)/i;
+
+    if (!navigator.clipboard?.readText) {
+      setSourceHint(`Clipboard access is unavailable. Paste a ${sourceLabel} link manually.`);
+      return;
+    }
+
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      const hit = text.match(matcher)?.[1]?.trim();
+      if (hit) {
+        onChangeDish(hit);
+        setSourceHint(`${sourceLabel} link pasted from clipboard.`);
+        return;
+      }
+      setSourceHint(`No ${sourceLabel} link found in clipboard. Paste one into the input.`);
+    } catch {
+      setSourceHint(`Clipboard permission blocked. Paste a ${sourceLabel} link manually.`);
+    }
+  };
+
   const modeMeta: Record<
     ModeId,
     { bg: string; glow: string; tagline: string; buttonText: string }
   > = {
     proteinify: {
       bg: "var(--accent)",
-      glow: "rgba(232,113,10,0.35)",
+      glow: "rgba(200,170,106,0.34)",
       tagline: "Same dish, more fuel",
-      buttonText: "Proteinify this dish →",
+      buttonText: "Transform this dish →",
     },
     lean: {
       bg: "var(--accent-gold)",
-      glow: "rgba(212,150,10,0.30)",
+      glow: "rgba(30,48,71,0.26)",
       tagline: "Same dish, lighter",
       buttonText: "Lean this dish →",
     },
@@ -67,7 +104,7 @@ export default function InputLab({
   const active = modeMeta[mode];
 
   const modeButtons = [
-    ["proteinify", "⚡ Proteinify", modeMeta.proteinify.tagline],
+    ["proteinify", "⚡ Wise Dish", modeMeta.proteinify.tagline],
     ["lean", "🔥 Lean Mode", modeMeta.lean.tagline],
   ] as const;
 
@@ -118,6 +155,7 @@ export default function InputLab({
             {/* INPUT AREA */}
             <div>
               <input
+                ref={inputRef}
                 type="text"
                 value={inputDish}
                 onChange={(e) => onChangeDish(e.target.value)}
@@ -126,7 +164,7 @@ export default function InputLab({
                 className={[
                   "mt-1 w-full rounded-[var(--radius-pill)] border-2 bg-[color:var(--bg)] px-6 py-4 text-sm",
                   "border-[color:rgba(40,25,10,0.15)] text-[color:var(--text-primary)] placeholder:text-[color:var(--text-faint)]",
-                  "focus:outline-none focus:border-2 focus:border-[color:var(--accent)] focus:ring-2 focus:ring-[color:rgba(232,113,10,0.18)]",
+                  "focus:outline-none focus:border-2 focus:border-[color:var(--accent)] focus:ring-2 focus:ring-[color:rgba(30,48,71,0.18)]",
                   "disabled:cursor-not-allowed disabled:opacity-60",
                 ].join(" ")}
               />
@@ -134,20 +172,31 @@ export default function InputLab({
                 <button
                   type="button"
                   title="Paste a TikTok link and we'll import the recipe"
-                  onClick={(e) => e.preventDefault()}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[11px] font-bold text-[color:var(--text-muted)]"
+                  disabled={disabled}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void tryPasteUrlFromClipboard("tiktok");
+                  }}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[11px] font-bold text-[color:var(--text-muted)]"
                 >
                   T
                 </button>
                 <button
                   type="button"
                   title="Paste a YouTube link and we'll import the recipe"
-                  onClick={(e) => e.preventDefault()}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[11px] font-bold text-[color:var(--text-muted)]"
+                  disabled={disabled}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void tryPasteUrlFromClipboard("youtube");
+                  }}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[11px] font-bold text-[color:var(--text-muted)]"
                 >
                   ▶
                 </button>
               </div>
+              {sourceHint ? (
+                <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">{sourceHint}</div>
+              ) : null}
 
               <div className="mt-3">
                 <div className="text-xs font-semibold text-[color:var(--text-muted)]">Examples</div>
