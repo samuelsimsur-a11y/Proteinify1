@@ -243,6 +243,17 @@ Macro coherence check before you ship a tier:
 Decision rubric, unchanged: dishFit → methodFit → textureFit → identitySafety → macroGain.
 `.trim();
 
+/** When DIL recognises the dish — the JSON already encodes identity; the model must not steamroll it for speed. */
+const DIL_CATALOGUED_DISH_RULES = `
+## Catalogued dish (Dish Identity Library)
+
+This dish has explicit culinary-grammar data in the **next section**. Treat it as **authoritative for identity**, ahead of generic shortcuts:
+- **Close Match** must still satisfy every non-negotiable, physics flag, and definitive “structurally absent” item unless the user clearly overrides.
+- **Cooking arcs** are ordered tracks — do not collapse multi-track logic (e.g. par-cook vs protein track vs assembly) into one vague “simmer everything” story.
+- **Texture contrast** names which component owns which mouthfeel — swaps must not silently invert those roles.
+- **appliedSwapCodes** must respect the valid / blocker / warning contract; empty [] only when no coded swaps apply.
+`.trim();
+
 const QUALITY_BAR = `
 ## Serious-cooks quality bar (rigor without fluff)
 
@@ -467,6 +478,7 @@ three graded tiers (Close Match, Balanced, Full Send). Tiers are change-lists on
   }
 
   if (dilDish) {
+    parts.push("", DIL_CATALOGUED_DISH_RULES);
     parts.push("", "## Culinary grammar constraints (Dish Identity Library)");
     parts.push(buildConstraintPromptFragment(dilDish));
   } else {

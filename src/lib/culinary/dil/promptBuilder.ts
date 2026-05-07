@@ -8,10 +8,19 @@ import { getGuardsForDish } from "./loader";
 
 // ─── Constraint prompt fragment ───────────────────────────────────────────────
 
+function summarizePhysics(dish: DishDNA): string {
+  const p = dish.physicsConstraints;
+  const bits: string[] = [];
+  if (p.moistureSensitive) bits.push("moisture-sensitive (no free-water / steam-breaking hacks)");
+  if (p.heatTransferCritical) bits.push("heat-transfer matters for protein texture");
+  if (p.acidTimingSensitive) bits.push("acid timing changes outcome — respect stages");
+  return bits.length > 0 ? bits.join("; ") : "none flagged";
+}
+
 /**
  * Builds the constraint block injected into the system prompt.
- * Uses only the fields that are small and meaningful to the LLM;
- * does NOT dump the entire DishDNA (token budget).
+ * Uses compact summaries of DishDNA fields the model needs for identity and texture;
+ * does NOT dump the entire JSON (token budget), but prefers **quality** over aggressive stripping.
  */
 export function buildConstraintPromptFragment(dish: DishDNA): string {
   const relevantGuards = getGuardsForDish(dish);   // FIX: derived, not hardcoded
@@ -24,7 +33,11 @@ export function buildConstraintPromptFragment(dish: DishDNA): string {
   const allValidCodes = relevantGuards.map(g => g.code);
 
   const arcSummary = dish.cookingArcs
-    .map(arc => `${arc.track}: ${arc.sequence.join(" → ")}`)
+    .map(arc => {
+      const merge = arc.mergeAt ? ` →@${arc.mergeAt}` : "";
+      const note = arc.notes ? ` (${arc.notes.slice(0, 120)}${arc.notes.length > 120 ? "…" : ""})` : "";
+      return `${arc.track}: ${arc.sequence.join(" → ")}${merge}${note}`;
+    })
     .join(" | ");
 
   const absentItems = dish.historicallyAbsent
@@ -32,17 +45,58 @@ export function buildConstraintPromptFragment(dish: DishDNA): string {
     .map(h => h.item)
     .join(", ");
 
+  const contestedAbsent = dish.historicallyAbsent
+    .filter(h => h.confidence === "contested" || h.confidence === "regional")
+    .slice(0, 2)
+    .map(h => h.item)
+    .join(", ");
+
+  const nonnegot = dish.keyNonnegotiables;
+  const nonnegotLine =
+    nonnegot.length <= 6
+      ? nonnegot.join("; ")
+      : `${nonnegot.slice(0, 6).join("; ")} (+${nonnegot.length - 6} more in data)`;
+
+  const fatLine = dish.fatVehicle
+    .slice(0, 5)
+    .map(f => `${f.stage}: ${f.name} (${f.role}, ${f.thermalPoint})`)
+    .join(" | ");
+
+  const acidLine = dish.acidAnchor
+    .slice(0, 3)
+    .map(
+      a =>
+        `${a.ingredient} @${a.stage} as ${a.role}` +
+        (a.contactTimeMinutes != null ? ` ~${a.contactTimeMinutes}m` : "")
+    )
+    .join(" | ");
+
+  const tc = dish.textureContrast;
+  const textureContrastLine = `${tc.primary.component}=${tc.primary.texture} vs ${tc.secondary.component}=${tc.secondary.texture} — preserve which component carries which mouthfeel.`;
+
+  const anchors = dish.structuralAnchors.slice(0, 4).join("; ");
+  const confusion = dish.confusionRisks.slice(0, 3).join("; ");
+
   return `
 ## CULINARY GRAMMAR CONSTRAINTS — ${dish.displayName.toUpperCase()}
-Zone: ${dish.cuisineZone}
+Zone: ${dish.cuisineZone} | transformation class: ${dish.transformationClass}
+Identity method: ${dish.identityMethod} | identity protein: ${dish.identityProtein ?? "unspecified"}
 Cooking arcs: ${arcSummary}
-Identity method: ${dish.identityMethod}
-Non-negotiables: ${dish.keyNonnegotiables.slice(0, 3).join("; ")}
-Structurally absent (definitive): ${absentItems || "none specified"}
+Fat / flavor vehicles (stage-aware): ${fatLine || "none listed"}
+Acid anchors: ${acidLine || "none listed"}
+Aromatic backbone (summary): ${dish.aromaticBase.slice(0, 4).join("; ") || "none listed"}
+Texture profile: ${dish.textureProfile.join(", ") || "n/a"}
+Texture contrast: ${textureContrastLine}
+Physics: ${summarizePhysics(dish)}
+Structural anchors: ${anchors || "none listed"}
+Non-negotiables: ${nonnegotLine}
+Structurally absent (definitive — do not introduce as authentic): ${absentItems || "none specified"}
+Absent / contested (treat carefully; do not assert as traditional): ${contestedAbsent || "none listed"}
+Common confusion risks: ${confusion || "none listed"}
 
 ## SWAP CODE CONTRACT
-You MUST call the apply_swap_codes tool with a JSON response.
-Do NOT describe swaps in free text. Do NOT invent codes.
+Populate **appliedSwapCodes** on each tier in the main JSON output using only the valid codes below.
+Do not invent codes. Do not use ad-hoc swap labels where a listed code exists for this dish.
 
 Valid codes for this dish: ${allValidCodes.length > 0 ? allValidCodes.join(" | ") : "(none — all free-text swaps require code mapping)"}
 

@@ -557,7 +557,7 @@ function buildUserMessage(
   mode: Mode,
   servings: number,
   sliders?: GenerateRequest["sliders"],
-  opts?: { quick?: boolean }
+  opts?: { quick?: boolean; dilRecognised?: boolean }
 ): string {
   if (opts?.quick) {
     const quickLines = [
@@ -568,6 +568,11 @@ function buildUserMessage(
     if (sliders?.flavorPreservation !== undefined) quickLines.push(`Flavor: ${sliders.flavorPreservation}/100`);
     if (sliders?.proteinAggression !== undefined) quickLines.push(`Protein: ${sliders.proteinAggression}/100`);
     if (sliders?.ingredientRealism !== undefined) quickLines.push(`Realism: ${sliders.ingredientRealism}/100`);
+    if (opts.dilRecognised) {
+      quickLines.push(
+        "This dish is in the identity library — honor the DIL section in the system prompt (arcs, physics, texture contrast, swap codes) even in fast mode; do not compress away method truth."
+      );
+    }
     quickLines.push(
       "Return valid schema JSON with one strong Close Match first. Keep all tiers fully coherent and culinary-real, not shorthand."
     );
@@ -590,6 +595,11 @@ function buildUserMessage(
   }
 
   lines.push("", "Output shape: ONE sharedRecipe (full baseline) + THREE tiers (Close Match, Balanced, Full Send).");
+  if (opts?.dilRecognised) {
+    lines.push(
+      "This dish is catalogued in the Dish Identity Library — the system prompt’s DIL block overrides generic shortcuts for identity, texture roles, and swap codes."
+    );
+  }
   lines.push(
     "First, mentally decompose the dish into slots: protein anchor, starch/structure, fat/flavor vehicle, " +
       "liquid/broth, acid/brightness, aromatics, garnish — baseline ingredients should cover each relevant slot."
@@ -781,7 +791,13 @@ export async function POST(req: NextRequest) {
                 ? "\nFAST CLOSE MATCH MODE: prioritize close-match quality and culinary realism. Keep all tier outputs specific, complete, and cook-credible."
                 : ""),
           },
-          { role: "user", content: buildUserMessage(dishInput, mode, servings, sliders, { quick: Boolean(quickCloseMatch) }) },
+          {
+            role: "user",
+            content: buildUserMessage(dishInput, mode, servings, sliders, {
+              quick: Boolean(quickCloseMatch),
+              dilRecognised: Boolean(dilDish),
+            }),
+          },
         ],
         temperature: 0.35,
         max_completion_tokens: maxTokens,

@@ -49,6 +49,10 @@ const nextConfig: NextConfig = {
         source: "/feedback",
         headers: [{ key: "Cache-Control", value: "private, no-cache, must-revalidate" }],
       },
+      {
+        source: "/privacy",
+        headers: [{ key: "Cache-Control", value: "private, no-cache, must-revalidate" }],
+      },
     ];
   },
 };

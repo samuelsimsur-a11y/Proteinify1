@@ -91,7 +91,7 @@ export default function InputLab({
       bg: "var(--accent)",
       glow: "rgba(200,170,106,0.34)",
       tagline: "Same dish, more fuel",
-      buttonText: "Transform this dish →",
+      buttonText: "Wise Dish this dish →",
     },
     lean: {
       bg: "var(--accent-gold)",

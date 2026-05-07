@@ -1,6 +1,7 @@
 const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
 const rawFallbacks = process.env.NEXT_PUBLIC_API_FALLBACK_URLS?.trim() ?? "";
-const PRODUCTION_API_BASE = "https://foodzap.vercel.app";
+/** Primary production Wise Dish deployment (SPA + `/api/*`). */
+const PRODUCTION_API_BASE = "https://foodzap-khaki.vercel.app";
 const LEGACY_PRODUCTION_API_BASE = "https://proteinify1.vercel.app";
 const CAPACITOR_PRIMARY_API_BASE_URL = PRODUCTION_API_BASE;
 const CAPACITOR_SECONDARY_API_BASE_URL = LEGACY_PRODUCTION_API_BASE;

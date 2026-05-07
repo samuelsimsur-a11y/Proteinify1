@@ -10,7 +10,7 @@ import FooterCta from "@/components/proteinify/FooterCta";
 export const metadata: Metadata = {
   title: "Wise Dish",
   description:
-    "Wise Dish helps you transform dishes you already love into higher-protein versions with clear trade-offs.",
+    "Wise Dish transforms dishes you already enjoy into higher-protein, practical recipes — same dish logic, clearer trade-offs.",
 };
 
 const clarityProjectId = process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID?.trim();

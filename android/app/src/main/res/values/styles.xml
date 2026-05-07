@@ -17,6 +17,6 @@
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash_foodzap</item>
+        <item name="android:background">@drawable/splash_wisedish</item>
     </style>
 </resources>

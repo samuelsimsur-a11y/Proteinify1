@@ -229,7 +229,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
 }
 
 export default function WiseDishApp() {
-  const showDebugOverlay = process.env.NODE_ENV !== "production";
+  const showDebugOverlay = process.env.NODE_ENV === "development";
   const [mode, setMode] = useState<ModeId>("proteinify");
   const [addVeggies, setAddVeggies] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);

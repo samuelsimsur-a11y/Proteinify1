@@ -10,7 +10,8 @@
     "dev:turbopack": "next dev --turbopack --port 3000",
     "dev:local": "next dev --webpack --port 3000",
     "build": "npm run guard:server-build && next build",
-    "build:android": "npm run guard:android-build && FOODZAP_STATIC_EXPORT=true next build && npx cap sync android",
+    "icons:android": "node scripts/generate-android-icons.cjs",
+    "build:android": "npm run guard:android-build && npm run icons:android && FOODZAP_STATIC_EXPORT=true next build && npx cap sync android",
     "guard:server-build": "node -e \"if (process.env.FOODZAP_STATIC_EXPORT === 'true') { console.error('FOODZAP_STATIC_EXPORT must be unset for serverful builds. Use npm run build:android for static export.'); process.exit(1); }\"",
     "guard:android-build": "node -e \"if (process.env.FOODZAP_STATIC_EXPORT && process.env.FOODZAP_STATIC_EXPORT !== 'true') { console.error('FOODZAP_STATIC_EXPORT must be true for Android static builds.'); process.exit(1); }\"",
     "android": "npx cap run android",
@@ -39,6 +40,7 @@
     "eslint": "latest",
     "eslint-config-next": "latest",
     "postcss": "latest",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "latest"
   }

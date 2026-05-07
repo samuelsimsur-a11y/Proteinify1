@@ -1,4 +1,4 @@
-package ca.foodzap.app;
+package ca.wisedish.app;
 
 import com.getcapacitor.BridgeActivity;
 

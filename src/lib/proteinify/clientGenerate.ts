@@ -13,7 +13,9 @@ import {
 } from "./parseResponse";
 
 /**
- * Calls the local generation API (full run streams SSE; single-version regen returns JSON).
+ * Calls `/api/generate` on your configured API host (web and Capacitor Android use the same client).
+ * Dish Identity Library constraints and system prompts live only on the server in that route — no duplicate
+ * prompt path in native code. Ship a new API deployment (or point the app at an updated origin) for prompt changes.
  */
 const GENERATE_TIMEOUT_MS = 150_000;
 export const GENERATE_ENDPOINT = withApiBase("/api/generate");

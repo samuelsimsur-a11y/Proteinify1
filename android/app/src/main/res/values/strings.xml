@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Wise Dish</string>
     <string name="title_activity_main">Wise Dish</string>
-    <string name="package_name">ca.foodzap.app</string>
-    <string name="custom_url_scheme">ca.foodzap.app</string>
+    <string name="package_name">ca.wisedish.app</string>
+    <string name="custom_url_scheme">ca.wisedish.app</string>
 </resources>
