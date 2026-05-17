@@ -101,6 +101,81 @@
   },
 
   {
+    "code": "cottage-cheese-biryani-marinade",
+    "constraints": {
+      "bannedDishes": ["biryani"]
+    },
+    "ingredientPhysics": {
+      "freeWaterReleaseRisk": "medium",
+      "textureBehaviorUnderHeat": "dissolves"
+    },
+    "violationIfBroken": "flavorarchviolation",
+    "severity": "blocker",
+    "quantityThreshold": {
+      "blockerAbovePct": 5,
+      "warningAbovePct": 0
+    },
+    "reason": "Cottage cheese in biryani marinade imports Western sauce logic and curdles under heat — not South Asian biryani grammar",
+    "educationalContext": "Biryani protein boost comes from portion, cut choice, yogurt marinade, and optional whey off-heat — not blended cottage cheese. Cottage cheese adds moisture and alien texture to the meat layer under dum.",
+    "safeAlternatives": [
+      "increase meat portion by 20–30%",
+      "konjac rice blend up to 30% — drained before layering",
+      "bone broth as rice parboil liquid only"
+    ],
+    "alternativesByGoal": {
+      "protein-boost": [
+        "increase chicken or lamb portion by 25–30%",
+        "konjac rice blend up to 30% — drain thoroughly",
+        "whey isolate in yogurt marinade off heat only"
+      ],
+      "general": [
+        "konjac rice blend up to 30%",
+        "increase original meat portion"
+      ]
+    },
+    "allowOverride": false
+  },
+
+  {
+    "code": "lentil-rice-dominant-biryani",
+    "constraints": {
+      "bannedDishes": ["biryani"]
+    },
+    "ingredientPhysics": {
+      "freeWaterReleaseRisk": "medium",
+      "textureBehaviorUnderHeat": "mashes"
+    },
+    "violationIfBroken": "structuralviolation",
+    "severity": "blocker",
+    "quantityThreshold": {
+      "blockerAbovePct": 15,
+      "warningAbovePct": 8
+    },
+    "reason": "Dominant lentil–rice blend changes basmati grain identity and dum texture",
+    "educationalContext": "Lentil-heavy rice blends read as khichdi-adjacent, not layered biryani. Konjac (≤30%, well drained) preserves separation; lentils belong as a side dal, not as the primary rice swap.",
+    "safeAlternatives": [
+      "konjac rice blend up to 30% — must be thoroughly drained before layering",
+      "increase meat portion by 20–30%",
+      "bone broth only as rice parboil liquid"
+    ],
+    "alternativesByGoal": {
+      "protein-boost": [
+        "konjac rice blend up to 30% — drain thoroughly",
+        "increase meat portion by 25–30%"
+      ],
+      "lower-calorie": [
+        "konjac rice blend up to 30%",
+        "reduce ghee in dum-drizzle stage"
+      ],
+      "general": [
+        "konjac rice blend up to 30%",
+        "increase original meat portion"
+      ]
+    },
+    "allowOverride": false
+  },
+
+  {
     "code": "soft-boiled-egg-alongside",
     "constraints": {
       "bannedDishes": ["biryani", "jerk-chicken", "pad-thai", "pho-bo"]

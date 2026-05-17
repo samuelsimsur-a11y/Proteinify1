@@ -10,10 +10,18 @@ import { checkGenerateRateLimit, getClientIp } from "@/lib/rateLimit/generateRou
 import { getDishByIdOrAlias, validateDILIntegrity } from "@/lib/culinary/dil/loader";
 import { getProteinifySchema } from "@/lib/culinary/dil/loadProteinifySchema";
 import { patchCompactProteinifySchema } from "@/lib/proteinify/ai/compactSchemaPatch";
+import {
+  BIRYANI_GENERATION_RETRY_USER_APPEND,
+  biryaniTextHitsToValidationResult,
+  buildDilConsistencyWarning,
+  checkBiryaniTierText,
+  hasBiryaniTextBlockers,
+  mergeValidationResults,
+} from "@/lib/culinary/dil/biryaniTextGuard";
 import { validateSwap } from "@/lib/culinary/dil/validator";
 import { buildSystemPrompt, type Mode } from "@/lib/culinary/systemPrompt";
 import { API_CORS_HEADERS, withCorsHeaders } from "@/lib/http/cors";
-import type { SwapInput, UserGoal, ValidationResult } from "@/lib/culinary/dil/schemas";
+import type { DishDNA, SwapInput, UserGoal, ValidationResult } from "@/lib/culinary/dil/schemas";
 
 const OPENAI_TIMEOUT_MS = 90_000;
 const OPENAI_MAX_ATTEMPTS = 2;
@@ -101,7 +109,7 @@ function getOpenAI(): OpenAI {
 // without reducing quality or changing model behavior.
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 120;
-const CACHE_SCHEMA_VERSION = "v2.9-cook-time-difficulty";
+const CACHE_SCHEMA_VERSION = "v3.1-biryani-text-guard";
 const responseCache = new Map<string, { expiresAt: number; value: GenerateResponse }>();
 const inflightRequests = new Map<string, Promise<GenerateResponse>>();
 // sharedRecipe + 3 tiers still needs headroom; truncation yields invalid JSON and 502s.
@@ -308,6 +316,8 @@ export interface VersionResult {
   mealPrepNote: string | null;
   dilValidation: ValidationResult | null;
   proteinMathWarning: string | null;   // surfaces when delta looks implausible
+  /** Set when biryani tier prose conflicts with DIL (even if appliedSwapCodes is empty). */
+  dilConsistencyWarning: string | null;
 }
 
 export interface GenerateResponse {
@@ -385,7 +395,7 @@ function normalizeTierDifficulty(raw: unknown): TierDifficulty {
 function mergeSharedWithTier(
   shared: SharedRecipePayload,
   tier: TierPayload
-): Omit<VersionResult, "dilValidation" | "proteinMathWarning"> {
+): Omit<VersionResult, "dilValidation" | "proteinMathWarning" | "dilConsistencyWarning"> {
   const ingredients = shared.ingredients.map((r) => ({ ...r }));
   for (const ch of tier.ingredientChanges) {
     if (ch.action === "add") {
@@ -469,7 +479,7 @@ function isLegacyTierPayload(v: Record<string, unknown>): boolean {
 
 function expandParsedToMergedVersions(parsedObj: Record<string, unknown>): Omit<
   VersionResult,
-  "dilValidation" | "proteinMathWarning"
+  "dilValidation" | "proteinMathWarning" | "dilConsistencyWarning"
 >[] {
   const versionsRaw = parsedObj.versions;
   if (!Array.isArray(versionsRaw) || versionsRaw.length !== 3) {
@@ -549,6 +559,77 @@ function checkProteinMath(version: {
   }
 
   return null;
+}
+
+type MergedVersionRow = Omit<
+  VersionResult,
+  "dilValidation" | "proteinMathWarning" | "dilConsistencyWarning"
+>;
+
+function annotateVersionsWithDil(
+  mergedVersions: MergedVersionRow[],
+  dilDish: DishDNA | null,
+  userGoal: UserGoal | undefined
+): { versions: VersionResult[]; biryaniTextBlockers: boolean } {
+  let biryaniTextBlockers = false;
+
+  const versions: VersionResult[] = mergedVersions.map((version) => {
+    const proteinMathWarning = checkProteinMath(version);
+    if (proteinMathWarning) {
+      console.warn(`[generate] protein math: ${version.name} — ${proteinMathWarning}`);
+    }
+
+    let swapValidation: ValidationResult | null = null;
+    if (dilDish && version.appliedSwapCodes.length > 0) {
+      const swapInputs: SwapInput[] = version.appliedSwapCodes.map((code) => ({
+        code,
+        quantity: "significant" as const,
+      }));
+      swapValidation = validateSwap(dilDish, swapInputs, {
+        userGoal: userGoal ?? "general",
+        onEvent: (e) => {
+          console.log(
+            `[dil] "${version.name}" valid=${e.isValid} violations=${e.violationCodes.join(",") || "none"}`
+          );
+        },
+      });
+    }
+
+    let textValidation: ValidationResult | null = null;
+    let dilConsistencyWarning: string | null = null;
+
+    if (dilDish?.id === "biryani") {
+      const textHits = checkBiryaniTierText({
+        summary: version.summary,
+        swapSummary: version.swapSummary,
+        transformationByComponent: version.transformationByComponent,
+        methodAdjustments: version.methodAdjustments,
+        ingredients: version.ingredients,
+        instructions: version.instructions,
+      });
+      textValidation = biryaniTextHitsToValidationResult(textHits);
+      dilConsistencyWarning = buildDilConsistencyWarning(version.name, textHits);
+      if (textHits.length > 0) {
+        console.warn(
+          `[dil:text] "${version.name}" hits=${textHits.map((h) => `${h.code}(${h.matchedPhrase})`).join("; ")}`
+        );
+        if (hasBiryaniTextBlockers(textHits)) {
+          biryaniTextBlockers = true;
+        }
+      }
+    }
+
+    const dilValidation = mergeValidationResults(swapValidation, textValidation);
+
+    return {
+      ...version,
+      dilValidation,
+      proteinMathWarning,
+      dilConsistencyWarning,
+    };
+  });
+
+  return { versions, biryaniTextBlockers };
 }
 
 // ─── User message builder ─────────────────────────────────────────────────────
@@ -772,114 +853,109 @@ export async function POST(req: NextRequest) {
     const generationPromise = (async (): Promise<GenerateResponse> => {
       const model = quickCloseMatch ? DEFAULT_QUICK_MODEL : DEFAULT_FULL_MODEL;
       const maxTokens = quickCloseMatch ? QUICK_CLOSE_MAX_TOKENS : MAX_COMPLETION_TOKENS;
-      const openAiStartedAt = Date.now();
-      // ── OpenAI call ─────────────────────────────────────────────────────────
       const proteinifySchema = patchCompactProteinifySchema(getProteinifySchema());
-      const completion = await createCompletionWithRetry({
-        model,
-        response_format: {
-          type: "json_schema",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          json_schema: proteinifySchema as any,
-        },
-        messages: [
-          {
-            role: "system",
-            content:
-              systemPrompt +
-              (quickCloseMatch
-                ? "\nFAST CLOSE MATCH MODE: prioritize close-match quality and culinary realism. Keep all tier outputs specific, complete, and cook-credible."
-                : ""),
-          },
-          {
-            role: "user",
-            content: buildUserMessage(dishInput, mode, servings, sliders, {
-              quick: Boolean(quickCloseMatch),
-              dilRecognised: Boolean(dilDish),
-            }),
-          },
-        ],
-        temperature: 0.35,
-        max_completion_tokens: maxTokens,
+      const maxAttempts =
+        dilDish?.id === "biryani" && !quickCloseMatch ? 2 : 1;
+
+      let userContent = buildUserMessage(dishInput, mode, servings, sliders, {
+        quick: Boolean(quickCloseMatch),
+        dilRecognised: Boolean(dilDish),
       });
-      console.info(
-        `[generate:perf] requestId=${requestId} quick=${Boolean(quickCloseMatch)} model=${model} openai_ms=${Date.now() - openAiStartedAt}`
-      );
 
-      const choice = completion.choices[0];
-      const raw = choice?.message?.content;
-      if (!raw) {
-        throw new Error("OpenAI returned empty response");
-      }
-      const finishReason = choice?.finish_reason ?? null;
-      if (finishReason === "length") {
-        console.warn(
-          `[generate] completion truncated at max_completion_tokens=${maxTokens} — consider shortening prompt or raising cap`
-        );
-      }
+      let lastResponse: GenerateResponse | null = null;
 
-      // ── Parse + merge sharedRecipe + tiers into full VersionResult rows ─────
-      let parsedObj: Record<string, unknown>;
-      try {
-        const root = parseModelJson(raw, { finishReason });
-        if (!root || typeof root !== "object" || Array.isArray(root)) {
-          throw new Error("Model root must be a JSON object.");
-        }
-        parsedObj = root as Record<string, unknown>;
-      } catch (err) {
-        if (err instanceof Error && err.message === "Failed to parse model output") {
-          throw err;
-        }
-        console.error("[generate] unexpected parse error:", err);
-        throw new Error("Failed to parse model output");
-      }
-
-      const mergedVersions = expandParsedToMergedVersions(parsedObj);
-      const dishOut = typeof parsedObj.dish === "string" ? parsedObj.dish : dishInput;
-      const taglineOut = typeof parsedObj.tagline === "string" ? parsedObj.tagline : "";
-
-      // ── DIL validation + protein math check per version ───────────────────
-      const telemetryEvents: unknown[] = [];
-
-      const versionsWithValidation: VersionResult[] = mergedVersions.map((version) => {
-        const proteinMathWarning = checkProteinMath(version);
-        if (proteinMathWarning) {
-          console.warn(`[generate] protein math: ${version.name} — ${proteinMathWarning}`);
-        }
-
-        if (!dilDish || version.appliedSwapCodes.length === 0) {
-          return { ...version, dilValidation: null, proteinMathWarning };
-        }
-
-        const swapInputs: SwapInput[] = version.appliedSwapCodes.map((code) => ({
-          code,
-          quantity: "significant" as const,
-        }));
-
-        const dilValidation = validateSwap(dilDish, swapInputs, {
-          userGoal: userGoal ?? "general",
-          onEvent: (e) => {
-            telemetryEvents.push(e);
-            console.log(
-              `[dil] "${version.name}" valid=${e.isValid} violations=${e.violationCodes.join(",") || "none"}`
-            );
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const openAiStartedAt = Date.now();
+        const completion = await createCompletionWithRetry({
+          model,
+          response_format: {
+            type: "json_schema",
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            json_schema: proteinifySchema as any,
           },
+          messages: [
+            {
+              role: "system",
+              content:
+                systemPrompt +
+                (quickCloseMatch
+                  ? "\nFAST CLOSE MATCH MODE: prioritize close-match quality and culinary realism. Keep all tier outputs specific, complete, and cook-credible."
+                  : ""),
+            },
+            { role: "user", content: userContent },
+          ],
+          temperature: 0.35,
+          max_completion_tokens: maxTokens,
         });
+        console.info(
+          `[generate:perf] requestId=${requestId} attempt=${attempt + 1}/${maxAttempts} quick=${Boolean(quickCloseMatch)} model=${model} openai_ms=${Date.now() - openAiStartedAt}`
+        );
 
-        return { ...version, dilValidation, proteinMathWarning };
-      });
+        const choice = completion.choices[0];
+        const raw = choice?.message?.content;
+        if (!raw) {
+          throw new Error("OpenAI returned empty response");
+        }
+        const finishReason = choice?.finish_reason ?? null;
+        if (finishReason === "length") {
+          console.warn(
+            `[generate] completion truncated at max_completion_tokens=${maxTokens} — consider shortening prompt or raising cap`
+          );
+        }
 
-      const response: GenerateResponse = {
-        dish: dishOut,
-        tagline: taglineOut,
-        dilDishId: dilDish?.id ?? null,
-        dilRecognised: !!dilDish,
-        servings,
-        versions: versionsWithValidation,
-      };
+        let parsedObj: Record<string, unknown>;
+        try {
+          const root = parseModelJson(raw, { finishReason });
+          if (!root || typeof root !== "object" || Array.isArray(root)) {
+            throw new Error("Model root must be a JSON object.");
+          }
+          parsedObj = root as Record<string, unknown>;
+        } catch (err) {
+          if (err instanceof Error && err.message === "Failed to parse model output") {
+            throw err;
+          }
+          console.error("[generate] unexpected parse error:", err);
+          throw new Error("Failed to parse model output");
+        }
 
-      if (shouldUseCache) setCachedResponse(cacheKey, response);
-      return response;
+        const mergedVersions = expandParsedToMergedVersions(parsedObj);
+        const dishOut = typeof parsedObj.dish === "string" ? parsedObj.dish : dishInput;
+        const taglineOut = typeof parsedObj.tagline === "string" ? parsedObj.tagline : "";
+
+        const { versions: versionsWithValidation, biryaniTextBlockers } = annotateVersionsWithDil(
+          mergedVersions,
+          dilDish,
+          userGoal
+        );
+
+        lastResponse = {
+          dish: dishOut,
+          tagline: taglineOut,
+          dilDishId: dilDish?.id ?? null,
+          dilRecognised: !!dilDish,
+          servings,
+          versions: versionsWithValidation,
+        };
+
+        const shouldRetryBiryani =
+          biryaniTextBlockers && attempt < maxAttempts - 1;
+        if (shouldRetryBiryani) {
+          console.warn(
+            `[generate] biryani text guard triggered retry (attempt ${attempt + 1}/${maxAttempts})`
+          );
+          userContent = `${userContent}\n\n${BIRYANI_GENERATION_RETRY_USER_APPEND}`;
+          continue;
+        }
+
+        break;
+      }
+
+      if (!lastResponse) {
+        throw new Error("Generation produced no response");
+      }
+
+      if (shouldUseCache) setCachedResponse(cacheKey, lastResponse);
+      return lastResponse;
     })();
 
     if (shouldUseCache) inflightRequests.set(cacheKey, generationPromise);

@@ -7,109 +7,143 @@ function normalizeSiteOrigin(raw: string | undefined): string | undefined {
 }
 
 const siteOrigin = normalizeSiteOrigin(process.env.NEXT_PUBLIC_SITE_URL);
-
-/** Set `NEXT_PUBLIC_PRIVACY_CONTACT_EMAIL` in production (required for reviewers). */
 const privacyContactEmail = process.env.NEXT_PUBLIC_PRIVACY_CONTACT_EMAIL?.trim() ?? "";
 
-const LAST_UPDATED_DISPLAY = "May 7, 2026";
+/** Renders contact line: real email from env, or literal `[your email]` until configured. */
+function ContactEmail({ className }: { className?: string }) {
+  const base = "font-medium text-[color:var(--accent)]";
+  if (privacyContactEmail) {
+    return (
+      <a href={`mailto:${privacyContactEmail}`} className={`${base} underline underline-offset-2 hover:opacity-90 ${className ?? ""}`}>
+        {privacyContactEmail}
+      </a>
+    );
+  }
+  return <span className={`text-[color:var(--text-primary)] ${className ?? ""}`}>[your email]</span>;
+}
 
 export const metadata: Metadata = {
-  title: "Privacy policy — Wise Dish",
+  title: "Privacy Policy — Wise Dish",
   description:
-    "Wise Dish privacy policy — no account required, local recipe storage, and OpenAI processing for recipe transformations.",
+    "Privacy policy for Wise Dish: recipe transformations with OpenAI, Microsoft Clarity analytics, local storage, no account required.",
   ...(siteOrigin ? { alternates: { canonical: `${siteOrigin}/privacy` } } : {}),
 };
 
 export default function PrivacyPage() {
   return (
     <section className="px-4 py-8">
-      <div className="mx-auto w-full max-w-3xl">
-        <div className="pf-card p-6">
-          <h1 className="font-display text-xl font-bold text-[color:var(--text-primary)]">Privacy policy</h1>
-          <p className="mt-2 text-xs text-[color:var(--text-muted)]">Last updated: {LAST_UPDATED_DISPLAY}</p>
-          <p className="mt-3 text-sm leading-relaxed text-[color:var(--text-muted)]">
-            Wise Dish is designed to be privacy-first.
-          </p>
+      <div className="mx-auto w-full max-w-2xl">
+        <article className="pf-card p-8 md:p-10">
+          <header className="border-b border-[color:var(--divider)] pb-6">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-[color:var(--text-primary)] md:text-[1.65rem]">
+              Privacy Policy — Wise Dish
+            </h1>
+            <p className="mt-3 text-sm text-[color:var(--text-muted)]">Last updated: May 2026</p>
+          </header>
 
-          <div className="mt-5 space-y-4 text-sm leading-relaxed text-[color:var(--text-muted)]">
-            <p>
-              <span className="font-semibold text-[color:var(--text-primary)]">Public access:</span> You can read this
-              privacy policy in any browser without installing the app, signing in, or creating an account. It is not
-              behind a login wall on either the website or inside the mobile app.
-            </p>
+          <div className="mt-8 space-y-10 text-sm leading-relaxed text-[color:var(--text-muted)]">
+            <section>
+              <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Overview</h2>
+              <p className="mt-3">
+                Wise Dish is a recipe transformation tool. We are committed to protecting your privacy.
+              </p>
+            </section>
 
-            {siteOrigin ? (
-              <p>
-                <span className="font-semibold text-[color:var(--text-primary)]">Public URL for store listings:</span>{" "}
+            <section>
+              <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Data We Collect</h2>
+              <p className="mt-3">
+                Wise Dish does not collect personal information. No account is required to use the app.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Recipe Processing</h2>
+              <p className="mt-3">
+                Recipe transformation requests are sent to OpenAI for processing. OpenAI may temporarily retain this data
+                for abuse monitoring per their privacy policy at{" "}
                 <a
-                  href={`${siteOrigin}/privacy`}
-                  className="font-semibold text-[color:var(--accent)] underline underline-offset-2 hover:opacity-90"
+                  href="https://openai.com/privacy"
+                  className="font-medium text-[color:var(--accent)] underline underline-offset-2 hover:opacity-90"
                   rel="noopener noreferrer"
                   target="_blank"
                 >
-                  {`${siteOrigin}/privacy`}
+                  openai.com/privacy
                 </a>
+                . We do not store your recipe requests on our servers.
               </p>
-            ) : (
-              <p>
-                <span className="font-semibold text-[color:var(--text-primary)]">Public URL for store listings:</span>{" "}
-                Set{" "}
-                <code className="rounded bg-black/5 px-1.5 py-0.5 text-[color:var(--text-primary)] dark:bg-white/10">
-                  NEXT_PUBLIC_SITE_URL
-                </code>{" "}
-                on your deployment so this page prints the exact HTTPS address for forms such as Google Play.
+            </section>
+
+            <section>
+              <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Local Storage</h2>
+              <p className="mt-3">
+                Saved recipes are stored locally on your device only. We cannot access this data. You can delete it at
+                any time by clearing the app data on your device.
               </p>
-            )}
+            </section>
 
-            <p>
-              Wise Dish does not collect personal information. No account is required.
-            </p>
+            <section>
+              <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">
+                Third Party Services
+              </h2>
+              <p className="mt-3">
+                We use OpenAI to process recipe transformations. We use Vercel to host the application. Neither OpenAI
+                nor Vercel receives personally identifiable information from Wise Dish through those services. Microsoft
+                Clarity is used for anonymous product analytics as described in the Analytics section.
+              </p>
+            </section>
 
-            <p>
-              Recipe transformation requests are sent to OpenAI for processing. OpenAI may temporarily retain this data
-              per their privacy policy at{" "}
-              <a
-                href="https://openai.com/privacy"
-                className="font-semibold text-[color:var(--accent)] underline underline-offset-2 hover:opacity-90"
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                openai.com/privacy
-              </a>
-              . We do not store your recipe requests on our servers.
-            </p>
-
-            <p>Saved recipes are stored locally on your device only. We cannot access this data.</p>
-
-            <p>
-              <span className="font-semibold text-[color:var(--text-primary)]">Website analytics:</span> The public
-              website may load Microsoft Clarity only when configured by the operator. Clear your browser/app data if
-              you want to discard local telemetry cookies from providers you use outside Wise Dish core features.
-            </p>
-
-            <p>
-              <span className="font-semibold text-[color:var(--text-primary)]">Contact:</span> For privacy questions,
-              email{" "}
-              {privacyContactEmail ? (
+            <section>
+              <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Analytics</h2>
+              <p className="mt-3">
+                We use Microsoft Clarity to understand how users interact with Wise Dish. Clarity collects anonymous
+                session data including taps, scrolls, and interaction patterns. This data is processed by Microsoft per
+                their privacy policy at{" "}
                 <a
-                  href={`mailto:${privacyContactEmail}`}
-                  className="font-semibold text-[color:var(--accent)] underline underline-offset-2 hover:opacity-90"
+                  href="https://www.microsoft.com/privacy"
+                  className="font-medium text-[color:var(--accent)] underline underline-offset-2 hover:opacity-90"
+                  rel="noopener noreferrer"
+                  target="_blank"
                 >
-                  {privacyContactEmail}
+                  microsoft.com/privacy
                 </a>
-              ) : (
-                <>
-                  <span className="text-[color:var(--accent)] font-semibold">[configured at deploy]</span> — add{" "}
-                  <code className="rounded bg-black/5 px-1 py-0.5 text-[color:var(--text-primary)] dark:bg-white/10">
-                    NEXT_PUBLIC_PRIVACY_CONTACT_EMAIL
-                  </code>{" "}
-                  to production environment variables before publishing store listings.
-                </>
-              )}
-              .
-            </p>
+                . No personally identifiable information is collected through Clarity.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">
+                Children&apos;s Privacy
+              </h2>
+              <p className="mt-3">
+                Wise Dish is not directed at children under 13. We do not knowingly collect data from minors.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Your Rights</h2>
+              <p className="mt-3">
+                Since we collect no personal data, there is nothing to access, correct, or delete on our end. For
+                questions contact: <ContactEmail />
+              </p>
+            </section>
+
+            <section>
+              <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">
+                Changes to This Policy
+              </h2>
+              <p className="mt-3">
+                We may update this policy as the app evolves. Continued use constitutes acceptance of changes.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Contact</h2>
+              <p className="mt-3">
+                For privacy questions email: <ContactEmail />
+              </p>
+            </section>
           </div>
-        </div>
+        </article>
       </div>
     </section>
   );

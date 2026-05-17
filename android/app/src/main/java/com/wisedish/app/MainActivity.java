@@ -1,4 +1,4 @@
-package ca.wisedish.app;
+package com.wisedish.app;
 
 import com.getcapacitor.BridgeActivity;
 

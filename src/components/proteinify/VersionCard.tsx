@@ -142,6 +142,11 @@ function VersionCardLegacy({
                 {scaledDelta >= 0 ? `+${scaledDelta}g` : `${scaledDelta}g`})
               </div>
             ) : null}
+            {version.dilConsistencyWarning ? (
+              <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/90 px-2.5 py-1.5 text-[11px] leading-snug text-amber-950">
+                {version.dilConsistencyWarning}
+              </p>
+            ) : null}
           </div>
           <div className="shrink-0 text-right">
             <button
@@ -475,6 +480,11 @@ function VersionCardV2({
                 Scaled: {scaledOriginalProtein}g → {scaledTotalProtein}g (
                 {scaledDelta >= 0 ? `+${scaledDelta}g` : `${scaledDelta}g`})
               </div>
+            ) : null}
+            {version.dilConsistencyWarning ? (
+              <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/90 px-2.5 py-1.5 text-[11px] leading-snug text-amber-950">
+                {version.dilConsistencyWarning}
+              </p>
             ) : null}
           </div>
           <div className="shrink-0 text-right">

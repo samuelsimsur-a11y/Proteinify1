@@ -16,7 +16,7 @@ function productionWebUrl(): string {
 }
 
 const config: CapacitorConfig = {
-  appId: "ca.wisedish.app",
+  appId: "com.wisedish.app",
   appName: "Wise Dish",
   webDir: "out",
   server: {

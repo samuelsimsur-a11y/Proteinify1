@@ -169,6 +169,7 @@ export function parseRecipeVersion(raw: unknown): RecipeVersion | null {
   const swapSummaryRaw = raw.swapSummary;
   const mealPrepNoteRaw = raw.mealPrepNote;
   const proteinMathWarningRaw = raw.proteinMathWarning;
+  const dilConsistencyWarningRaw = raw.dilConsistencyWarning;
   const tasteScore = raw.tasteScore;
   const realismScore = raw.realismScore;
   const aggressivenessScore = raw.aggressivenessScore;
@@ -225,6 +226,12 @@ export function parseRecipeVersion(raw: unknown): RecipeVersion | null {
     proteinMathWarning = proteinMathWarningRaw as string | null;
   }
 
+  let dilConsistencyWarning: string | null | undefined;
+  if (dilConsistencyWarningRaw !== undefined) {
+    if (!(dilConsistencyWarningRaw === null || isString(dilConsistencyWarningRaw))) return null;
+    dilConsistencyWarning = dilConsistencyWarningRaw as string | null;
+  }
+
   let adds: AdditionItem[] = [];
   if (addsRaw === undefined) {
     adds = [];
@@ -270,6 +277,7 @@ export function parseRecipeVersion(raw: unknown): RecipeVersion | null {
     ...(swapSummary !== undefined ? { swapSummary } : {}),
     ...(mealPrepNote !== undefined ? { mealPrepNote } : {}),
     ...(proteinMathWarning !== undefined ? { proteinMathWarning } : {}),
+    ...(dilConsistencyWarning !== undefined ? { dilConsistencyWarning } : {}),
     tasteScore,
     realismScore,
     aggressivenessScore,
@@ -391,6 +399,7 @@ export function parseProteinifyResponseJson(json: unknown): ParseResult {
     const swapSummary = raw.swapSummary;
     const mealPrepNote = raw.mealPrepNote;
     const proteinMathWarning = raw.proteinMathWarning;
+    const dilConsistencyWarning = raw.dilConsistencyWarning;
 
     const ingredientsRaw = raw.ingredients;
     const instructionsRaw = raw.instructions;
@@ -448,6 +457,9 @@ export function parseProteinifyResponseJson(json: unknown): ParseResult {
       ...(Array.isArray(swapSummary) ? { swapSummary } : {}),
       ...(mealPrepNote === null || isString(mealPrepNote) ? { mealPrepNote } : {}),
       ...(proteinMathWarning === null || isString(proteinMathWarning) ? { proteinMathWarning } : {}),
+      ...(dilConsistencyWarning === null || isString(dilConsistencyWarning)
+        ? { dilConsistencyWarning }
+        : {}),
       ingredients: ingredients.map((ing, i) => {
         if (!isRecord(ing)) return ing;
         const nameVal = ing.name;

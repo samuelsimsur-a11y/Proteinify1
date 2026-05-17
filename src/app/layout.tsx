@@ -13,7 +13,17 @@ export const metadata: Metadata = {
     "Wise Dish transforms dishes you already enjoy into higher-protein, practical recipes — same dish logic, clearer trade-offs.",
 };
 
-const clarityProjectId = process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID?.trim();
+/** Wise Dish production Clarity project. Override with `NEXT_PUBLIC_CLARITY_PROJECT_ID`; set `NEXT_PUBLIC_CLARITY_DISABLED=true` to omit. */
+const DEFAULT_CLARITY_PROJECT_ID = "wpkobycjfy";
+
+function resolveClarityProjectId(): string {
+  if (process.env.NEXT_PUBLIC_CLARITY_DISABLED === "true") return "";
+  const fromEnv = process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID?.trim();
+  if (fromEnv === "false" || fromEnv === "0") return "";
+  return fromEnv || DEFAULT_CLARITY_PROJECT_ID;
+}
+
+const clarityProjectId = resolveClarityProjectId();
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

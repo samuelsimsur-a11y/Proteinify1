@@ -5,6 +5,13 @@ export { getDishByIdOrAlias } from "./loader";
 export { validateDILIntegrity } from "./loader";
 export { buildConstraintPromptFragment, buildToolDefinition, buildAPIPayload, extractSwapsFromResponse } from "./promptBuilder";
 export { validateSwap } from "./validator";
+export {
+  checkBiryaniTierText,
+  biryaniTextHitsToValidationResult,
+  mergeValidationResults,
+  buildDilConsistencyWarning,
+  BIRYANI_GENERATION_RETRY_USER_APPEND,
+} from "./biryaniTextGuard";
 export type {
   DishDNA,
   SwapGuard,

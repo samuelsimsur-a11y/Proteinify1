@@ -74,6 +74,8 @@ export type RecipeVersion = {
   swapSummary?: string[];
   mealPrepNote?: string | null;
   proteinMathWarning?: string | null;
+  /** Biryani: prose conflicts with DIL when swap codes were empty or wrong. */
+  dilConsistencyWarning?: string | null;
   tasteScore: number; // 0-10
   realismScore: number; // 0-10
   aggressivenessScore: number; // 0-10

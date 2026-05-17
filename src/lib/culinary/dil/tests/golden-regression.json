@@ -29,6 +29,34 @@
     }
   },
   {
+    "description": "Biryani: cottage cheese in marinade — blocker",
+    "dishId": "biryani",
+    "swaps": [
+      { "code": "cottage-cheese-biryani-marinade", "quantity": "significant" }
+    ],
+    "options": { "userGoal": "protein-boost" },
+    "expected": {
+      "isValid": false,
+      "violationCount": 1,
+      "blockedCodes": ["cottage-cheese-biryani-marinade"],
+      "shouldSuggest": ["konjac rice blend up to 30%"]
+    }
+  },
+  {
+    "description": "Biryani: dominant lentil-rice blend — blocker",
+    "dishId": "biryani",
+    "swaps": [
+      { "code": "lentil-rice-dominant-biryani", "quantity": "dominant" }
+    ],
+    "options": { "userGoal": "protein-boost" },
+    "expected": {
+      "isValid": false,
+      "violationCount": 1,
+      "blockedCodes": ["lentil-rice-dominant-biryani"],
+      "shouldSuggest": ["konjac rice blend up to 30%"]
+    }
+  },
+  {
     "description": "Biryani: soy chunks at trace quantity should be a warning not a blocker",
     "dishId": "biryani",
     "swaps": [

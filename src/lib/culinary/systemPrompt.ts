@@ -3,7 +3,10 @@
 // protein math validated against real weights; cook-ready instructions.
 
 import type { DishDNA } from "@/lib/culinary/dil/schemas";
-import { buildConstraintPromptFragment } from "@/lib/culinary/dil/promptBuilder";
+import {
+  buildBiryaniTransformationAddon,
+  buildConstraintPromptFragment,
+} from "@/lib/culinary/dil/promptBuilder";
 
 export type Mode = "proteinify" | "lean" | "veggify";
 
@@ -153,11 +156,15 @@ originalProteinG estimates (per single serving):
 const CREATIVE_SWAP_PALETTE = `
 ## Creative swap palette — use these before defaulting to whey
 
+**Catalogued DIL dishes:** If the Dish Identity Library block lists **accepted adaptations** or dish-specific rules below it, those **override** this palette. Never apply generic cottage cheese, lentil-rice, or quinoa swaps when they contradict DIL (e.g. biryani → konjac blend + bone-broth parboil, not lentil rice).
+
+**Dum biryani (DIL recognises biryani):** Ignore the generic “cottage cheese blended” dairy line entirely. Yogurt marinade + optional whey whisked **into cold yogurt before marinating** are the coherent dairy moves. **Never** blended cottage cheese, ricotta sneaks in marinade, or cooked-lentils-mixed-through-rice as the main carb story — see the mandatory biryani block in the prompt.
+
 Before reaching for whey isolate, consider these whole-food protein levers first.
 Each is a real food a home cook would have or easily find.
 
 High-protein swaps by food category:
-- Dairy: Greek yogurt (17g/100g), cottage cheese blended (11g/100g),
+- Dairy: Greek yogurt (17g/100g), cottage cheese blended (11g/100g) — **never for dum biryani**,
   skyr (11g/100g), labneh (7g/100g), ricotta (11g/100g)
 - Eggs: whole egg (13g/100g), egg whites only for invisible boost
 - Legumes: edamame (11g/100g), cooked lentils (9g/100g),
@@ -228,7 +235,8 @@ target without breaking method, emulsion, moisture balance, or cultural grammar.
    - Respect curdling: yogurt and whey need off-heat finish or buffered context; blended cottage only for smooth systems.
 
 4) Carbs — compress without collapsing structure
-   - Legume–wheat pasta blends, partial lentil rice, smaller starch portion + veg or extra lean protein to hold plate weight.
+   - Legume–wheat pasta blends or partial lentil rice **only where DIL allows** (not dum biryani — use konjac blend ≤30% per DIL).
+   - Smaller starch portion + extra lean protein when structure allows.
    - Never cauliflower-rice a dum, biryani, or pilaf that steams on starch integrity.
 
 5) Fats — trim what does not pay rent
@@ -270,7 +278,7 @@ const NEGATIVE_EXAMPLES = `
 ## Negative examples (must avoid)
 - Ramen: no cottage cheese/cream dairy in broth; prefer broth-native protein moves.
 - Pad Thai: no dairy sauce logic or wet broth hacks in stir-fry noodles.
-- Biryani: no full cauliflower-rice replacement or high free-water substitutions under dum.
+- Biryani: no full cauliflower-rice; no cottage cheese / ricotta / “cheese puree” in marinade or protein layer; no dominant lentil–rice blend (no 40–50/50 lentil rice, no khichdi-style grain); starch hack = **≤30% konjac rice substitute by dry weight blended with basmati**, rinsed boiled squeezed dry — **preferred for Balanced / Full Send**; bone broth / stock **only** as **rice-parboil liquid** (not poured over dum layers); whisk unflavored whey into **cold** yogurt marinade **before** the meat marinades — never orphan a “mix whey after cooking” step; no cream cheese or post-layer dairy flood.
 - Dry-rub grilled dishes: no broth/cream/yogurt insertion that changes method grammar.
 - Creamy sauces: no broth-first dilution when dairy optimization is the coherent path.
 `.trim();
@@ -349,6 +357,12 @@ const RECIPE_QUALITY = `
   of the full baseline method.
 - Tiers escalate: more levers and/or stronger swaps as you move toward Full Send; later tiers may subsume earlier ones.
 - Every instruction object needs step + heatGuard + textureNote (use null only if truly N/A); never use | in text.
+
+### Dum biryani only (when the DIL dish is biryani)
+- **Carb / Full Send:** The allowed high-protein starch move is **konjac rice blend ≤30% of total rice starch weight** with drained basmati — not lentil-heavy rice. If you shrink rice portion instead, say so; do **not** replace the rice story with a cooked-lentil mix.
+- **Marinade:** Protein boost = more / leaner bone-in or boneless pieces in recognised cuts, richer yogurt marinade, optional whey **only** whisked into cold yogurt **before** meat rests in it. Forbidden: blended cottage cheese, paneer crumble in marinade, ricotta base, cream cheese “creaminess”.
+- **Bone broth:** Use **only** as the simmering liquid for **parboiling** the drained rice/grain bound for layering — phrase it plainly in ingredients (e.g. “unsalted beef or chicken stock for rice parboil”).
+- **Method order:** All marinade actions (including whey) happen **before** the meat hits the heat for bhuna; never contradict by appending whey after dum or after partial meat cook unless you are rewriting the marinade step entirely into one coherent block.
 
 ### Ingredient naming (user-facing)
 - Every **ingredient name** in the recipe (sharedRecipe and tiers) must sound like something a person would say in a kitchen
@@ -481,6 +495,9 @@ three graded tiers (Close Match, Balanced, Full Send). Tiers are change-lists on
     parts.push("", DIL_CATALOGUED_DISH_RULES);
     parts.push("", "## Culinary grammar constraints (Dish Identity Library)");
     parts.push(buildConstraintPromptFragment(dilDish));
+    if (dilDish.id === "biryani") {
+      parts.push("", buildBiryaniTransformationAddon());
+    }
   } else {
     parts.push("", "## Dish not in DIL — apply general culinary judgment. appliedSwapCodes must be [].");
   }

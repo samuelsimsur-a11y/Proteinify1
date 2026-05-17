@@ -76,6 +76,20 @@ export function buildConstraintPromptFragment(dish: DishDNA): string {
 
   const anchors = dish.structuralAnchors.slice(0, 4).join("; ");
   const confusion = dish.confusionRisks.slice(0, 3).join("; ");
+  const accepted =
+    dish.acceptedAdaptations.length > 0
+      ? dish.acceptedAdaptations.map((a) => `- ${a}`).join("\n")
+      : "- (none listed)";
+
+  const proteinBoostAlts = relevantGuards
+    .flatMap((g) => g.alternativesByGoal?.["protein-boost"] ?? g.safeAlternatives ?? [])
+    .filter((v, i, arr) => arr.indexOf(v) === i)
+    .slice(0, 6);
+
+  const proteinBoostLine =
+    proteinBoostAlts.length > 0
+      ? proteinBoostAlts.map((a) => `- ${a}`).join("\n")
+      : "";
 
   return `
 ## CULINARY GRAMMAR CONSTRAINTS — ${dish.displayName.toUpperCase()}
@@ -94,6 +108,10 @@ Structurally absent (definitive — do not introduce as authentic): ${absentItem
 Absent / contested (treat carefully; do not assert as traditional): ${contestedAbsent || "none listed"}
 Common confusion risks: ${confusion || "none listed"}
 
+## ACCEPTED ADAPTATIONS (prefer these — override generic swap palette)
+${accepted}
+${proteinBoostLine ? `\nProtein-boost levers from guards (when applicable):\n${proteinBoostLine}` : ""}
+
 ## SWAP CODE CONTRACT
 Populate **appliedSwapCodes** on each tier in the main JSON output using only the valid codes below.
 Do not invent codes. Do not use ad-hoc swap labels where a listed code exists for this dish.
@@ -104,6 +122,25 @@ BLOCKED (blocker): ${blockerCodes.length > 0 ? blockerCodes.join(", ") : "none"}
 FLAGGED (warning, user can override): ${warningCodes.length > 0 ? warningCodes.join(", ") : "none"}
 
 If no relevant swap codes apply, return: { "appliedSwaps": [] }
+`.trim();
+}
+
+/** Extra tier rules for catalogued dum-steam biryani — konjac / bone broth / anti-slop. */
+export function buildBiryaniTransformationAddon(): string {
+  return `
+## Biryani transformation priorities (DIL — mandatory when this dish is biryani)
+
+**Carb / rice (identity):** Long-grain basmati owns the granular mouthfeel contrast with protein. Do **not** replace that story with lentil-heavy rice blends (≈40–50% lentils, khichdi-style rice, bulk “rice + lentil” mix).
+
+**Structural protein-preserving starch hack (preferred Balanced → Full Send):** **Konjac rice substitute blended up to 30%** of total **rice starch dry weight** with basmati — rinse aggressively, briefly boil/kill mucilage, squeeze **bone-dry**, then combine with drained parboiled basmati for layering. Mention honest texture trade-off in summary.
+
+**Liquid / bone broth:** Unsalted **stock or bone broth** may replace plain water **only** as liquid for **parboiling the rice**. Never flood the dum vessel post-layer; never “finish” with broth pours.
+
+**Protein stack (preferred order):** (1) +20–30% same-species protein in recognisable pieces, (2) leaner coherent cut without drying (breast sizing + timing cues), (3) optional unflavored **whey whisked into cold yogurt** so the marinade is one coherent mixture **before** the meat sits — never a dangling “add whey after cooking” step.
+
+**Banned for every tier:** cottage cheese, ricotta marinade body, paneer crumble in marinade, cream cheese richness in protein layer; cooked-lentils kneaded through rice as the main carb tactic; cauliflower rice substitute; textured soy/soya chunks inside the dum; soft-boiled egg garnish masquerading as meat biryani.
+
+**Full Send (what “max” means here):** Max = **konjac ≤30%** + **correct bone-broth parboil discipline** + **meat/yogurt+whey marinade** — not cottage cheese hacks and not lentil-grain takeover. If whey is deployed, it is **already in the yogurt marinade** before contact time begins.
 `.trim();
 }
 
