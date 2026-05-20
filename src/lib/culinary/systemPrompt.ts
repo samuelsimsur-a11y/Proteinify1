@@ -2,6 +2,7 @@
 // v2 — Close Match now swaps/blends before adding; serving multiplier;
 // protein math validated against real weights; cook-ready instructions.
 
+import type { DishClassification } from "@/lib/culinary/classifier";
 import type { DishDNA } from "@/lib/culinary/dil/schemas";
 import {
   buildBiryaniTransformationAddon,
@@ -55,7 +56,7 @@ Also for Close Match:
   • For mac and cheese or cheese-sauce dishes: preserve true cheese-sauce identity and include realistic cheese options
     such as reduced-fat cheddar or reduced-fat + fat-free cheddar/mozzarella blends before non-cheese substitutions.
 
-Whey isolate is allowed in Balanced and Full Send only.
+Whey isolate is allowed in Balanced and Full Send only — **except dum biryani (DIL biryani): Full Send only** (see biryani block).
 In Balanced it should be presented as optional.
 In Full Send it can be a primary lever.
 
@@ -158,7 +159,7 @@ const CREATIVE_SWAP_PALETTE = `
 
 **Catalogued DIL dishes:** If the Dish Identity Library block lists **accepted adaptations** or dish-specific rules below it, those **override** this palette. Never apply generic cottage cheese, lentil-rice, or quinoa swaps when they contradict DIL (e.g. biryani → konjac blend + bone-broth parboil, not lentil rice).
 
-**Dum biryani (DIL recognises biryani):** Ignore the generic “cottage cheese blended” dairy line entirely. Yogurt marinade + optional whey whisked **into cold yogurt before marinating** are the coherent dairy moves. **Never** blended cottage cheese, ricotta sneaks in marinade, or cooked-lentils-mixed-through-rice as the main carb story — see the mandatory biryani block in the prompt.
+**Dum biryani (DIL recognises biryani):** Ignore the generic “cottage cheese blended” dairy line entirely. Yogurt marinade is the dairy base for all tiers; **whey isolate whisked into cold yogurt before marinating is Full Send only** — never Close Match or Balanced. **Never** blended cottage cheese, ricotta sneaks in marinade, or cooked-lentils-mixed-through-rice as the main carb story — see the mandatory biryani block in the prompt.
 
 Before reaching for whey isolate, consider these whole-food protein levers first.
 Each is a real food a home cook would have or easily find.
@@ -278,7 +279,7 @@ const NEGATIVE_EXAMPLES = `
 ## Negative examples (must avoid)
 - Ramen: no cottage cheese/cream dairy in broth; prefer broth-native protein moves.
 - Pad Thai: no dairy sauce logic or wet broth hacks in stir-fry noodles.
-- Biryani: no full cauliflower-rice; no cottage cheese / ricotta / “cheese puree” in marinade or protein layer; no dominant lentil–rice blend (no 40–50/50 lentil rice, no khichdi-style grain); starch hack = **≤30% konjac rice substitute by dry weight blended with basmati**, rinsed boiled squeezed dry — **preferred for Balanced / Full Send**; bone broth / stock **only** as **rice-parboil liquid** (not poured over dum layers); whisk unflavored whey into **cold** yogurt marinade **before** the meat marinades — never orphan a “mix whey after cooking” step; no cream cheese or post-layer dairy flood.
+- Biryani: no full cauliflower-rice; no cottage cheese / ricotta / “cheese puree” in marinade or protein layer; no dominant lentil–rice blend (no 40–50/50 lentil rice, no khichdi-style grain); starch hack = **≤30% konjac rice substitute by dry weight blended with basmati**, rinsed boiled squeezed dry — **preferred for Balanced / Full Send**; bone broth / stock **only** as **rice-parboil liquid** (not poured over dum layers); **whey isolate in yogurt marinade — Full Send tier only** (whisk into cold yogurt before meat marinates; never in Close Match or Balanced); never orphan a “mix whey after cooking” step; no cream cheese or post-layer dairy flood.
 - Dry-rub grilled dishes: no broth/cream/yogurt insertion that changes method grammar.
 - Creamy sauces: no broth-first dilution when dairy optimization is the coherent path.
 `.trim();
@@ -320,6 +321,7 @@ const SWAP_SUMMARY_RULES = `
 - Maximum 5 words per pill
 - No sentences, no explanations
 - **Close Match:** never list whey isolate, protein powder, or supplements in swapSummary (those are banned for that tier).
+- **Dum biryani — Balanced:** same whey ban as Close Match (yogurt marinade only; reserve whey for Full Send).
 `.trim();
 
 const TIER_SUMMARY_RULES = `
@@ -360,9 +362,10 @@ const RECIPE_QUALITY = `
 
 ### Dum biryani only (when the DIL dish is biryani)
 - **Carb / Full Send:** The allowed high-protein starch move is **konjac rice blend ≤30% of total rice starch weight** with drained basmati — not lentil-heavy rice. If you shrink rice portion instead, say so; do **not** replace the rice story with a cooked-lentil mix.
-- **Marinade:** Protein boost = more / leaner bone-in or boneless pieces in recognised cuts, richer yogurt marinade, optional whey **only** whisked into cold yogurt **before** meat rests in it. Forbidden: blended cottage cheese, paneer crumble in marinade, ricotta base, cream cheese “creaminess”.
-- **Bone broth:** Use **only** as the simmering liquid for **parboiling** the drained rice/grain bound for layering — phrase it plainly in ingredients (e.g. “unsalted beef or chicken stock for rice parboil”).
-- **Method order:** All marinade actions (including whey) happen **before** the meat hits the heat for bhuna; never contradict by appending whey after dum or after partial meat cook unless you are rewriting the marinade step entirely into one coherent block.
+- **Marinade — Close Match & Balanced:** More / leaner pieces in recognised cuts and richer **yogurt-only** marinade. **No whey isolate, protein powder, or supplements** in swapSummary, ingredients, slots, or steps.
+- **Marinade — Full Send only:** May whisk unflavored whey into **cold** yogurt **before** meat rests in it. Forbidden in every tier: blended cottage cheese, paneer crumble in marinade, ricotta base, cream cheese “creaminess”.
+- **Bone broth:** Use **only** as the simmering liquid for **parboiling** the drained rice/grain bound for layering — allowed in **Balanced and Full Send**; phrase plainly in ingredients (e.g. “unsalted chicken stock for rice parboil”).
+- **Method order:** Full Send whey goes in the marinade **before** the meat hits the heat for bhuna; never append whey after dum or after partial meat cook.
 
 ### Ingredient naming (user-facing)
 - Every **ingredient name** in the recipe (sharedRecipe and tiers) must sound like something a person would say in a kitchen
@@ -393,6 +396,160 @@ const RECIPE_QUALITY = `
 - If a heat note or technique caution is needed, it must appear only in **heatGuard** or **textureNote** on the instruction object — never as improvised tags inside **step** text.
 `.trim();
 
+export function buildClassificationRules(classification: DishClassification): string {
+  const parts: string[] = [];
+
+  if (classification.baseline_protein_g >= 35) {
+    parts.push(`
+## Baseline protein awareness (pre-classified)
+
+BASELINE AWARENESS: This dish already contains an estimated ${classification.baseline_protein_g}g protein per serving — this is already high.
+
+Reframe the three versions accordingly:
+- Close Match: "fine-tune" — subtle optimisations only
+- Balanced: "push further" — meaningful additions
+- Full Send: "max stack" — aggressive but honest about change
+
+Do NOT add protein sources that duplicate what is already the primary protein in this dish.
+Example: do not add chicken breast to a chicken tikka.
+Instead optimise the existing chicken preparation.
+`.trim());
+  }
+
+  if (classification.dietary_flags.length > 0) {
+    parts.push(`
+## Dietary hard constraints (pre-classified)
+
+[HARD CONSTRAINT — CANNOT BE OVERRIDDEN]
+Detected dietary requirements: ${classification.dietary_flags.join(", ")}
+
+ALL THREE VERSIONS must comply with these constraints.
+This is not a preference. It is a requirement.
+
+VEGAN constraints: No whey, no casein, no dairy of any kind, no eggs, no meat, no fish, no honey, no gelatin.
+Approved vegan protein sources (use these only):
+tempeh (18g/100g), edamame (11g/100g), hemp seeds (32g/100g),
+pea protein isolate (80g/100g), seitan if not gluten-free (25g/100g),
+nutritional yeast (50g/100g), firm tofu (17g/100g),
+black beans (9g/100g), lentils (9g/100g).
+
+HALAL constraints: No pork, no alcohol, no pork-derived gelatin.
+
+GLUTEN-FREE constraints: No wheat, no barley, no rye, no regular soy sauce.
+Use tamari instead of soy sauce.
+
+If Full Send cannot reach its protein target within these constraints,
+cap at the maximum achievable and state honestly:
+"Maximum protein within [constraint] constraints: +Xg"
+Never violate constraints to hit a protein target.
+`.trim());
+  }
+
+  if (classification.dish_components.length > 1) {
+    const proteinTarget = classification.protein_component || "protein side";
+    parts.push(`
+## Dish component boundaries (pre-classified)
+
+DISH COMPONENT BOUNDARIES:
+This dish has multiple distinct components: ${classification.dish_components.join(", ")}
+The primary identity component is the BASE — not the protein side.
+
+Rules:
+- Close Match: only adjust QUANTITIES of existing ingredients.
+  Never introduce a new component into the base.
+- Balanced/Full Send: new protein can be added but must be
+  culturally adjacent to the dish's existing protein logic.
+- NEVER merge protein into the base if protein is traditionally served
+  alongside it. (e.g. Jollof Rice: boost the chicken side,
+  do not add protein powder to the rice base.)
+- NEVER suggest a protein swap that changes the base component's
+  identity. The base IS the dish.
+
+Protein component identified: ${proteinTarget}
+Boost this component. Protect the base.
+`.trim());
+  }
+
+  if (classification.dish_type === "dessert") {
+    const physicsNote =
+      classification.texture_note?.trim() ||
+      "dessert textures depend on precise water activity, emulsion stability, and heat transfer gradients.";
+    parts.push(`
+## Dessert structural rules (pre-classified)
+
+DESSERT STRUCTURAL RULES — these override normal protein logic:
+
+Physics note: ${physicsNote}
+
+BANNED in all dessert batters, doughs, and mixtures that will be
+cooked above 150°C or steamed:
+- Whey isolate (hygroscopic — steals free water, collapses emulsions,
+  denatures at 65-80°C before structure sets)
+- Any protein powder mixed directly into batter
+
+APPROVED protein additions for desserts by context:
+
+BAKED (cakes, cookies, brownies, pastry):
+✅ Casein powder — slow water absorption, moist crumb, heat stable
+✅ Almond flour swap — increases protein + fat, changes texture slightly
+✅ Egg whites — additional structural protein, fine to bake
+✅ Greek yogurt — fold into wet ingredients cold before baking
+❌ Whey in batter — forbidden
+
+STEAMED (dumplings, bao, mochi):
+✅ Lean meat portion increase — native protein, no texture change
+✅ Added filling protein (tofu, edamame in filling only)
+❌ Anything added to the dough/wrapper — breaks elasticity
+
+NO-BAKE / COLD-SET (mousse, cheesecake, protein balls):
+✅ Whey isolate — safe here, no heat denaturation
+✅ Casein — ideal for overnight cold-set
+✅ Silken tofu blended smooth
+
+Protein gain ceiling for desserts:
+- Close Match: max +8g
+- Balanced: max +15g
+- Full Send: max +20g with mandatory warning:
+  "⚠️ At this protein level the texture shifts noticeably from the original. This is a high-protein reinterpretation."
+
+If this dish's identity depends on a specific texture (molten, flaky, crispy, airy, silky):
+State this explicitly: "We've protected the [texture] — here's how we added protein without touching the structure."
+`.trim());
+  }
+
+  if (classification.texture_critical) {
+    const note =
+      classification.texture_note?.trim() ||
+      "This dish's identity depends on a specific texture that protein additions could destroy.";
+    parts.push(`
+## Texture-critical dish (pre-classified)
+
+TEXTURE CRITICAL DISH:
+${note}
+
+The identity of this dish is inseparable from its texture.
+Any protein addition that risks destroying this texture
+must be flagged explicitly in the version summary.
+
+For Close Match: zero risk to texture is acceptable —
+use only additions that integrate without structural change.
+
+For Full Send: if maximum protein cannot be achieved
+without texture risk, label it honestly:
+"Higher-protein reinterpretation — texture shifts from original."
+`.trim());
+  }
+
+  if (classification.assumed_variant) {
+    parts.push(
+      `Interpret this request as: "${classification.assumed_variant}" (pre-classified variant).`
+    );
+  }
+
+  if (parts.length === 0) return "";
+  return parts.join("\n\n");
+}
+
 export function buildSystemPrompt(
   mode: Mode,
   dilDish: DishDNA | null,
@@ -400,7 +557,8 @@ export function buildSystemPrompt(
   importedRecipe?: {
     ingredients?: string[];
     instructions?: string[];
-  }
+  },
+  classificationRules: string = ""
 ): string {
   const servingNote = servings > 1
     ? `
@@ -431,6 +589,9 @@ three graded tiers (Close Match, Balanced, Full Send). Tiers are change-lists on
     "## Transformation mode",
     MODE_INSTRUCTIONS[mode],
     "",
+    ...(classificationRules.trim()
+      ? ["## Pre-classification rules", classificationRules.trim(), ""]
+      : []),
     OPTIMIZATION_PRIORITY,
     "",
     QUALITY_BAR,

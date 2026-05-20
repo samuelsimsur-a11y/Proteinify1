@@ -273,6 +273,10 @@ export default function WiseDishApp() {
     p95Ms?: number;
     samples: number;
   } | null>(null);
+  const [disambiguationOptions, setDisambiguationOptions] = useState<{
+    assumed: string | null;
+    variants: string[];
+  } | null>(null);
 
   /** Bumped on mode change so in-flight generates don’t repopulate stale results. */
   const resultsGenerationKey = useRef(0);
@@ -379,11 +383,13 @@ export default function WiseDishApp() {
     });
   }, []);
 
-  const handleGenerateAll = async (forceFresh: boolean = false) => {
+  const handleGenerateAll = async (forceFresh: boolean = false, dishOverride?: string) => {
     const perfStart = typeof performance !== "undefined" ? performance.now() : Date.now();
     let quickElapsedMs: number | undefined;
-    const normalised = inputDish.trim().toLowerCase();
-    if (!forceFresh && !isUrl(inputDish) && normalised) {
+    const dishInputStart = dishOverride ?? inputDish;
+    const normalised = dishInputStart.trim().toLowerCase();
+    setDisambiguationOptions(null);
+    if (!forceFresh && !isUrl(dishInputStart) && normalised && !dishOverride) {
       const existing =
         getSavedRecipe(normalised, mode, sliderKey) ?? getLatestSavedRecipeByDishMode(normalised, mode);
       if (existing) {
@@ -400,10 +406,15 @@ export default function WiseDishApp() {
     setIsImporting(false);
     setError(null);
     setResponse(null);
-    setStreamingVersions([buildFastCloseMatchDraft(inputDish), null, null]);
+    setStreamingVersions([buildFastCloseMatchDraft(dishInputStart), null, null]);
     setResultId(createResultId());
     setOverridesByVersion(emptyOverrides());
-    let dishForGenerate = inputDish;
+    let dishForGenerate = dishInputStart;
+    const savedForClassification =
+      !isUrl(dishInputStart) && normalised
+        ? getLatestSavedRecipeByDishMode(normalised, mode)
+        : null;
+    const cachedClassification = savedForClassification?.classification;
     let importedRecipe:
       | {
           ingredients: string[];
@@ -414,9 +425,9 @@ export default function WiseDishApp() {
         }
       | undefined;
 
-    if (isUrl(inputDish)) {
+    if (isUrl(dishInputStart)) {
       setIsImporting(true);
-      const importRes = await importRecipeFromUrl(inputDish);
+      const importRes = await importRecipeFromUrl(dishInputStart);
       setIsImporting(false);
       if (!importRes.ok) {
         setStreamingVersions(null);
@@ -460,10 +471,20 @@ export default function WiseDishApp() {
         transformationMode: mode,
         addVeggies,
         importedRecipe,
+        cachedClassification,
       }),
-              12_000
+      12_000
     );
-    if (quickClose?.ok) {
+    if (quickClose && "needsDisambiguation" in quickClose) {
+      setStreamingVersions(null);
+      setDisambiguationOptions({
+        assumed: quickClose.assumedVariant,
+        variants: quickClose.possibleVariants,
+      });
+      setIsGenerating(false);
+      return;
+    }
+    if (quickClose && quickClose.ok) {
       const quickDone = typeof performance !== "undefined" ? performance.now() : Date.now();
       quickElapsedMs = Math.max(0, quickDone - quickStart);
       setStreamingVersions((prev) => {
@@ -485,6 +506,7 @@ export default function WiseDishApp() {
         transformationMode: mode,
         addVeggies,
         importedRecipe,
+        cachedClassification,
       },
       {
         onVersion: (index, version) => {
@@ -507,7 +529,15 @@ export default function WiseDishApp() {
       setIsGenerating(false);
       return;
     }
-    if (r.ok) {
+    if ("needsDisambiguation" in r) {
+      setDisambiguationOptions({
+        assumed: r.assumedVariant,
+        variants: r.possibleVariants,
+      });
+      setIsGenerating(false);
+      return;
+    }
+    if ("ok" in r && r.ok) {
       setResponse(r.data);
       const now = Date.now();
       const source: SavedRecipe["source"] = importedRecipe?.source ?? "typed";
@@ -523,6 +553,7 @@ export default function WiseDishApp() {
         tagline: "Three versions. Pick your trade-off.",
         source,
         sliderKey,
+        classification: r.data.classificationFull,
       });
       const perfDone = typeof performance !== "undefined" ? performance.now() : Date.now();
       recordPerf({
@@ -532,7 +563,7 @@ export default function WiseDishApp() {
         quickMs: quickElapsedMs,
         fullMs: Math.max(0, perfDone - perfStart),
       });
-    } else {
+    } else if ("error" in r) {
       setError(r.error);
     }
     setIsGenerating(false);
@@ -575,7 +606,7 @@ export default function WiseDishApp() {
         : undefined,
     });
     if (genKey === resultsGenerationKey.current) {
-      if (r.ok) {
+      if ("ok" in r && r.ok) {
         setResponse(r.data);
         setPreviewServings(servings);
         setResultId(createResultId());
@@ -592,7 +623,7 @@ export default function WiseDishApp() {
           source: importContext?.source ?? "typed",
           sliderKey,
         });
-      } else {
+      } else if ("error" in r) {
         setError(r.error);
       }
     }
@@ -654,9 +685,14 @@ export default function WiseDishApp() {
       setPreviewServings(servings);
       setStreamingVersions(null);
       if (genKey === resultsGenerationKey.current) {
-        if (r.ok) {
+        if ("needsDisambiguation" in r) {
+          setDisambiguationOptions({
+            assumed: r.assumedVariant,
+            variants: r.possibleVariants,
+          });
+        } else if ("ok" in r && r.ok) {
           setResponse(r.data);
-        } else {
+        } else if ("error" in r) {
           setError(r.error);
         }
       }
@@ -696,12 +732,21 @@ export default function WiseDishApp() {
         thirdVersionLabel={thirdVersionLabel}
         showAdvanced={showAdvanced}
         onToggleAdvanced={() => setShowAdvanced((v) => !v)}
-        onGenerate={handleGenerateAll}
+        onGenerate={() => void handleGenerateAll()}
         chips={EXAMPLE_CHIPS}
         onPickExample={onPickExample}
         isGenerating={isGenerating}
         isImporting={isImporting}
         disabled={isBusy}
+        disambiguationOptions={disambiguationOptions}
+        onPickDisambiguationVariant={(variant) => {
+          setInputDish(variant);
+          void handleGenerateAll(true, variant);
+        }}
+        onDisambiguationOther={() => {
+          setDisambiguationOptions(null);
+          setError(null);
+        }}
       />
 
       <div className="mt-2">
@@ -716,6 +761,13 @@ export default function WiseDishApp() {
         ) : null}
         <ResultsPreview
           response={response}
+          classification={response?.classification ?? null}
+          onRetryWrongDish={() => {
+            setResponse(null);
+            setStreamingVersions(null);
+            setError(null);
+            void handleGenerateAll(true);
+          }}
           streamingVersions={streamingVersions}
           resultId={resultId}
           dish={inputDish}

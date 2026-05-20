@@ -102,12 +102,43 @@ const BIRYANI_TEXT_RULES: TextRule[] = [
   },
 ];
 
+const WHEY_IN_PROSE_PATTERNS = [
+  /\bwhey\b/i,
+  /protein\s+powder/i,
+  /whey\s+isolate/i,
+  /\+1\s+scoop\s+whey/i,
+];
+
+const WHEY_ALLOWED_TIERS = new Set(["full send"]);
+
 const DEFAULT_SUGGESTIONS = [
   "konjac rice blend up to 30% — drain thoroughly before layering",
   "increase original meat portion by 20–30%",
-  "bone broth only as rice parboil liquid",
-  "whey isolate whisked into cold yogurt before marinating",
+  "bone broth only as rice parboil liquid (Balanced and Full Send)",
+  "whey isolate whisked into cold yogurt before marinating — Full Send tier only",
 ];
+
+function isWheyAllowedTier(tierName: string | undefined): boolean {
+  if (!tierName) return true;
+  return WHEY_ALLOWED_TIERS.has(tierName.trim().toLowerCase());
+}
+
+function checkWheyInWrongTier(tierName: string | undefined, haystack: string): BiryaniTextHit | null {
+  if (isWheyAllowedTier(tierName)) return null;
+  for (const pattern of WHEY_IN_PROSE_PATTERNS) {
+    const match = haystack.match(pattern);
+    if (match) {
+      return {
+        code: "whey-biryani-wrong-tier",
+        severity: "blocker",
+        reason: "Whey isolate and protein powder are reserved for Full Send biryani only.",
+        matchedPhrase: match[0],
+        violationType: "confusionviolation",
+      };
+    }
+  }
+  return null;
+}
 
 export function collectBiryaniTierText(source: BiryaniTierTextSource): string {
   const parts: string[] = [
@@ -125,9 +156,15 @@ export function collectBiryaniTierText(source: BiryaniTierTextSource): string {
   return parts.filter(Boolean).join("\n");
 }
 
-export function checkBiryaniTierText(source: BiryaniTierTextSource): BiryaniTextHit[] {
+export function checkBiryaniTierText(
+  source: BiryaniTierTextSource,
+  tierName?: string
+): BiryaniTextHit[] {
   const haystack = collectBiryaniTierText(source);
   const hits: BiryaniTextHit[] = [];
+
+  const wheyHit = checkWheyInWrongTier(tierName, haystack);
+  if (wheyHit) hits.push(wheyHit);
 
   for (const rule of BIRYANI_TEXT_RULES) {
     for (const pattern of rule.patterns) {
@@ -159,7 +196,7 @@ export function biryaniTextHitsToValidationResult(hits: BiryaniTextHit[]): Valid
       severity: h.severity,
       reason: `${h.reason} (matched: "${h.matchedPhrase}")`,
       educationalContext:
-        "This was detected in recipe prose even though appliedSwapCodes was empty. Regenerate using konjac ≤30%, bone-broth parboil only, and yogurt+whey marinade discipline.",
+        "This was detected in recipe prose even though appliedSwapCodes was empty. Regenerate using konjac ≤30%, bone-broth parboil (Balanced/Full Send), yogurt-only marinade for Close Match and Balanced, and whey in yogurt marinade for Full Send only.",
       safeAlternatives: DEFAULT_SUGGESTIONS,
       goalAlternatives: [] as string[],
       allowOverride: rule?.allowOverride ?? h.severity === "warning",
@@ -198,7 +235,10 @@ export function buildDilConsistencyWarning(
   const blockers = hits.filter((h) => h.severity === "blocker");
   if (blockers.length === 0) return null;
   const codes = [...new Set(blockers.map((b) => b.code))].join(", ");
-  return `${tierName}: recipe text conflicts with biryani DIL (${codes}). Prefer konjac ≤30% (drained), bone-broth rice parboil only, and no cottage cheese or lentil-heavy rice.`;
+  const wheyNote = blockers.some((b) => b.code === "whey-biryani-wrong-tier")
+    ? " Whey is Full Send only."
+    : "";
+  return `${tierName}: recipe text conflicts with biryani DIL (${codes}). Prefer konjac ≤30% (drained), bone-broth rice parboil only, and no cottage cheese or lentil-heavy rice.${wheyNote}`;
 }
 
 export function hasBiryaniTextBlockers(hits: BiryaniTextHit[]): boolean {
@@ -211,6 +251,7 @@ CRITICAL CORRECTION — your previous JSON violated dum biryani rules detected i
 - Do NOT use lentil-heavy rice blends (no 40–50% lentils, no khichdi-style grain, no "lentil rice blend" as the carb story).
 - Starch hack for Balanced/Full Send: konjac rice substitute up to 30% of rice dry weight with basmati, rinsed, boiled briefly, squeezed bone-dry — NOT lentil rice.
 - Bone broth/stock ONLY as the liquid for parboiling rice before layering — never poured over dum layers.
-- Whey only whisked into COLD yogurt before the meat marinates — never a separate "add whey after cooking/dum" step.
+- Whey isolate / protein powder: **Full Send tier only**, whisked into COLD yogurt before the meat marinates — remove from Close Match and Balanced entirely.
+- Never a separate "add whey after cooking/dum" step.
 Regenerate all tiers with appliedSwapCodes where relevant and coherent ingredient/instruction text.
 `.trim();

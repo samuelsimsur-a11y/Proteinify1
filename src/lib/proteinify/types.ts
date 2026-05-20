@@ -89,10 +89,22 @@ export type RecipeVersion = {
   steps: RecipeStep[];
 };
 
+export type DishClassificationSummary = {
+  baseline_protein_g: number;
+  dish_type: string;
+  assumed_variant: string | null;
+  texture_critical: boolean;
+  dietary_flags: string[];
+  ambiguity_score?: "low" | "medium" | "high";
+};
+
 export type ProteinifyResponse = {
   inputDish: string;
   assumptions: string[];
   versions: [RecipeVersion, RecipeVersion, RecipeVersion];
+  classification?: DishClassificationSummary;
+  /** Full classifier payload for recipe-log cache (not shown in UI). */
+  classificationFull?: import("@/lib/culinary/classifier").DishClassification;
 };
 
 export type IngredientOverride = {

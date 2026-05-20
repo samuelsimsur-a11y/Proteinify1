@@ -77,6 +77,32 @@ describe("biryaniTextGuard", () => {
     expect(hits.some((h) => h.code === "cottage-cheese-biryani-marinade")).toBe(false);
   });
 
+  it("flags whey in Balanced tier prose", () => {
+    const hits = checkBiryaniTierText(
+      sample({
+        transformationByComponent: {
+          protein: ["whey isolate whisked into yogurt marinade"],
+          carbBase: ["Unchanged basmati"],
+          sauceBroth: [],
+          fat: [],
+          toppings: [],
+        },
+      }),
+      "Balanced"
+    );
+    expect(hits.some((h) => h.code === "whey-biryani-wrong-tier")).toBe(true);
+  });
+
+  it("allows whey in Full Send tier prose", () => {
+    const hits = checkBiryaniTierText(
+      sample({
+        ingredients: [{ name: "Plain yogurt with whey isolate (30g)", note: "marinade" }],
+      }),
+      "Full Send"
+    );
+    expect(hits.some((h) => h.code === "whey-biryani-wrong-tier")).toBe(false);
+  });
+
   it("produces invalid ValidationResult when blockers present", () => {
     const hits = checkBiryaniTierText(
       sample({ ingredients: [{ name: "Cottage cheese", note: "" }] })

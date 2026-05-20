@@ -1,6 +1,11 @@
 "use client";
 
-import type { ProteinifyResponse, RecipeVersion, TransformationMode } from "@/lib/proteinify/types";
+import type {
+  DishClassificationSummary,
+  ProteinifyResponse,
+  RecipeVersion,
+  TransformationMode,
+} from "@/lib/proteinify/types";
 import { useEffect, useState } from "react";
 import VersionCard from "./VersionCard";
 type VersionId = RecipeVersion["id"];
@@ -9,6 +14,8 @@ type StreamingSlots = [RecipeVersion | null, RecipeVersion | null, RecipeVersion
 
 type Props = {
   response: ProteinifyResponse | null;
+  classification?: DishClassificationSummary | null;
+  onRetryWrongDish?: () => void;
   /** Filled progressively during full generate; null when not streaming. */
   streamingVersions: StreamingSlots | null;
   resultId: string;
@@ -37,6 +44,8 @@ type Props = {
 
 export default function ResultsPreview({
   response,
+  classification,
+  onRetryWrongDish,
   streamingVersions,
   resultId,
   dish,
@@ -144,6 +153,28 @@ export default function ResultsPreview({
         <div className="mt-2 px-1 text-center text-[11px] leading-snug text-[color:var(--text-muted)]">
           Ingredients scale with serving size. Protein stays per serving.
         </div>
+
+        {classification && classification.baseline_protein_g >= 35 ? (
+          <div className="mt-3 rounded-xl border border-amber-300/80 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+            Already protein-rich — starting at ~{classification.baseline_protein_g}g per serving
+          </div>
+        ) : null}
+
+        {classification?.assumed_variant &&
+        (classification.ambiguity_score === "medium" || classification.ambiguity_score === "low") ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 px-1 text-[11px] text-[color:var(--text-muted)]">
+            <span>Interpreted as: {classification.assumed_variant}</span>
+            {onRetryWrongDish ? (
+              <button
+                type="button"
+                onClick={onRetryWrongDish}
+                className="font-semibold text-[color:var(--accent)] hover:underline"
+              >
+                Wrong dish? Retry
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {error ? (
           <div className="mt-4 pf-card p-4">

@@ -1,3 +1,4 @@
+import type { DishClassification } from "@/lib/culinary/classifier";
 import type { IngredientOverride, ProteinifyResponse, SliderValues, TransformationMode } from "./types";
 
 export type VersionId = "close-match" | "balanced" | "max-protein";
@@ -45,6 +46,18 @@ export type GenerateApiRequestBody = {
    * When present, generation should use this as the baseline context.
    */
   importedRecipe?: ImportedRecipeContext;
+  /** From recipe log — server skips classifier OpenAI call when set. */
+  cachedClassification?: DishClassification;
+};
+
+/** Early return when dish name is highly ambiguous. */
+export type GenerateDisambiguationResponse = {
+  needsDisambiguation: true;
+  assumedVariant: string | null;
+  possibleVariants: string[];
+  dishName: string;
+  classification?: ProteinifyResponse["classification"];
+  classificationFull?: DishClassification;
 };
 
 export type GenerateApiErrorBody = {

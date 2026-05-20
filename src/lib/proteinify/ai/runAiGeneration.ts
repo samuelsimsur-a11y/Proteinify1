@@ -10,7 +10,7 @@ import {
   mergeSingleCompactVersion,
   parseExpandAndValidateProteinify,
 } from "@/lib/proteinify/expander/expandRecipe";
-import { parseModelJsonOutput } from "@/lib/proteinify/parseResponse";
+import { isParseFailure, isParseSuccess, parseModelJsonOutput } from "@/lib/proteinify/parseResponse";
 
 export type AiGenerationResult =
   | { ok: true; data: ProteinifyResponse }
@@ -43,13 +43,16 @@ export async function runFullAiGeneration(args: {
 
   const tmode = args.body.transformationMode ?? "proteinify";
   const validated = parseExpandAndValidateProteinify(parsedText.value, tmode);
-  if (!validated.ok) {
+  if (isParseFailure(validated)) {
     return {
       ok: false,
       code: "AI_SCHEMA",
       error: validated.error,
       details: parsedText.value,
     };
+  }
+  if (!isParseSuccess(validated)) {
+    return { ok: false, code: "AI_SCHEMA", error: "Disambiguation is not supported in this code path." };
   }
 
   return { ok: true, data: validated.data };
@@ -88,8 +91,11 @@ export async function runSingleVersionAiGeneration(args: {
 
   const tmode = args.body.transformationMode ?? "proteinify";
   const validated = mergeSingleCompactVersion(parsedText.value, tv, args.previous, tmode);
-  if (!validated.ok) {
+  if (isParseFailure(validated)) {
     return { ok: false, code: "AI_SCHEMA", error: validated.error, details: parsedText.value };
+  }
+  if (!isParseSuccess(validated)) {
+    return { ok: false, code: "AI_SCHEMA", error: "Disambiguation is not supported in this code path." };
   }
 
   return { ok: true, data: validated.data };

@@ -1,4 +1,5 @@
 import { isCapacitorNative } from "@/lib/capacitorEnv";
+import type { DishClassification } from "@/lib/culinary/classifier";
 
 export interface SavedRecipe {
   id: string;
@@ -11,6 +12,8 @@ export interface SavedRecipe {
   tagline: string;
   source?: "typed" | "youtube" | "tiktok" | "text";
   sliderKey?: string;
+  /** Cached pre-classifier output — skips classifier on repeat generations. */
+  classification?: DishClassification;
 }
 
 const STORAGE_KEY = "wisedish_recipe_log";

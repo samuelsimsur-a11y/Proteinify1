@@ -136,11 +136,13 @@ export function buildBiryaniTransformationAddon(): string {
 
 **Liquid / bone broth:** Unsalted **stock or bone broth** may replace plain water **only** as liquid for **parboiling the rice**. Never flood the dum vessel post-layer; never “finish” with broth pours.
 
-**Protein stack (preferred order):** (1) +20–30% same-species protein in recognisable pieces, (2) leaner coherent cut without drying (breast sizing + timing cues), (3) optional unflavored **whey whisked into cold yogurt** so the marinade is one coherent mixture **before** the meat sits — never a dangling “add whey after cooking” step.
+**Protein stack — Close Match & Balanced:** (1) +20–30% same-species protein in recognisable pieces, (2) leaner coherent cut without drying (breast sizing + timing cues), (3) richer **yogurt-only** marinade — **no whey isolate, protein powder, or supplements** in these tiers.
+
+**Protein stack — Full Send only:** Add unflavored **whey whisked into cold yogurt** so the marinade is one coherent mixture **before** the meat sits — never a dangling “add whey after cooking” step. Whey must not appear in Close Match or Balanced swapSummary, ingredients, methodAdjustments, or transformation slots.
 
 **Banned for every tier:** cottage cheese, ricotta marinade body, paneer crumble in marinade, cream cheese richness in protein layer; cooked-lentils kneaded through rice as the main carb tactic; cauliflower rice substitute; textured soy/soya chunks inside the dum; soft-boiled egg garnish masquerading as meat biryani.
 
-**Full Send (what “max” means here):** Max = **konjac ≤30%** + **correct bone-broth parboil discipline** + **meat/yogurt+whey marinade** — not cottage cheese hacks and not lentil-grain takeover. If whey is deployed, it is **already in the yogurt marinade** before contact time begins.
+**Full Send (what “max” means here):** Max = **konjac ≤30%** + **correct bone-broth parboil discipline** + **meat/yogurt+whey marinade** — not cottage cheese hacks and not lentil-grain takeover. Bone broth parboil is allowed in **Balanced and Full Send**; whey is **Full Send only**.
 `.trim();
 }
 

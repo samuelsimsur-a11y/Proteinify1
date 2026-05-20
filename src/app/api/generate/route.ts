@@ -19,7 +19,13 @@ import {
   mergeValidationResults,
 } from "@/lib/culinary/dil/biryaniTextGuard";
 import { validateSwap } from "@/lib/culinary/dil/validator";
-import { buildSystemPrompt, type Mode } from "@/lib/culinary/systemPrompt";
+import {
+  classifyDish,
+  toClassificationWire,
+  type DishClassification,
+  type DishClassificationWire,
+} from "@/lib/culinary/classifier";
+import { buildClassificationRules, buildSystemPrompt, type Mode } from "@/lib/culinary/systemPrompt";
 import { API_CORS_HEADERS, withCorsHeaders } from "@/lib/http/cors";
 import type { DishDNA, SwapInput, UserGoal, ValidationResult } from "@/lib/culinary/dil/schemas";
 
@@ -109,7 +115,7 @@ function getOpenAI(): OpenAI {
 // without reducing quality or changing model behavior.
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 120;
-const CACHE_SCHEMA_VERSION = "v3.1-biryani-text-guard";
+const CACHE_SCHEMA_VERSION = "v3.3-dish-classifier";
 const responseCache = new Map<string, { expiresAt: number; value: GenerateResponse }>();
 const inflightRequests = new Map<string, Promise<GenerateResponse>>();
 // sharedRecipe + 3 tiers still needs headroom; truncation yields invalid JSON and 502s.
@@ -277,6 +283,8 @@ interface GenerateRequest {
     originalTitle?: string;
     confidence?: "high" | "medium" | "low";
   };
+  /** Client recipe-log cache — skips the classifier OpenAI call when present. */
+  cachedClassification?: DishClassification;
 }
 
 // ─── Response shape ───────────────────────────────────────────────────────────
@@ -327,6 +335,13 @@ export interface GenerateResponse {
   dilRecognised: boolean;
   servings: number;
   versions: VersionResult[];
+  classification?: DishClassificationWire;
+  /** Full classification for client recipe-log cache (repeat generations skip classifier). */
+  classificationFull?: DishClassification;
+  needsDisambiguation?: boolean;
+  assumedVariant?: string | null;
+  possibleVariants?: string[];
+  dishName?: string;
 }
 
 // ─── Shared recipe + tier merge (token-efficient vs 3× full recipes) ─────────
@@ -599,14 +614,17 @@ function annotateVersionsWithDil(
     let dilConsistencyWarning: string | null = null;
 
     if (dilDish?.id === "biryani") {
-      const textHits = checkBiryaniTierText({
-        summary: version.summary,
-        swapSummary: version.swapSummary,
-        transformationByComponent: version.transformationByComponent,
-        methodAdjustments: version.methodAdjustments,
-        ingredients: version.ingredients,
-        instructions: version.instructions,
-      });
+      const textHits = checkBiryaniTierText(
+        {
+          summary: version.summary,
+          swapSummary: version.swapSummary,
+          transformationByComponent: version.transformationByComponent,
+          methodAdjustments: version.methodAdjustments,
+          ingredients: version.ingredients,
+          instructions: version.instructions,
+        },
+        version.name
+      );
       textValidation = biryaniTextHitsToValidationResult(textHits);
       dilConsistencyWarning = buildDilConsistencyWarning(version.name, textHits);
       if (textHits.length > 0) {
@@ -749,7 +767,8 @@ function buildUserMessage(
   if (dishLower.includes("biryani")) {
     lines.push(
       "If user did not specify biryani style, default to chicken dum biryani baseline. " +
-      "Use developed base language (marinade, birista, layered rice, dum finish) rather than generic 'stock/broth' wording."
+        "Use developed base language (marinade, birista, layered rice, dum finish) rather than generic 'stock/broth' wording. " +
+        "BIRYANI TIER RULE: whey isolate / protein powder in yogurt marinade is **Full Send only** — Close Match and Balanced use yogurt-only marinade (portion + lean cut + optional bone-broth rice parboil)."
     );
   }
   if (dishLower.includes("mac") && dishLower.includes("cheese")) {
@@ -805,6 +824,7 @@ export async function POST(req: NextRequest) {
       userGoal,
       sliders,
       importedRecipe,
+      cachedClassification,
     } = body;
 
     const mode = requestMode ?? transformationMode ?? "proteinify";
@@ -840,15 +860,46 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Pre-classifier (before main generation) ───────────────────────────────
+    const classification =
+      cachedClassification && typeof cachedClassification === "object"
+        ? cachedClassification
+        : await classifyDish(dishInput);
+
+    if (
+      classification.ambiguity_score === "high" &&
+      classification.possible_variants.length > 1
+    ) {
+      return jsonResponse(
+        {
+          needsDisambiguation: true,
+          assumedVariant: classification.assumed_variant,
+          possibleVariants: classification.possible_variants,
+          dishName: dishInput,
+          classification: toClassificationWire(classification),
+          classificationFull: classification,
+        },
+        requestId
+      );
+    }
+
+    const classificationRules = buildClassificationRules(classification);
+
     // ── DIL lookup ────────────────────────────────────────────────────────────
     const dilDish = getDishByIdOrAlias(dishInput);
 
     console.log(
-      `[generate] dish="${dishInput}" | dil=${dilDish?.id ?? "unknown"} | mode=${mode} | servings=${servings} | goal=${userGoal ?? "none"}`
+      `[generate] dish="${dishInput}" | dil=${dilDish?.id ?? "unknown"} | mode=${mode} | servings=${servings} | goal=${userGoal ?? "none"} | baseline=${classification.baseline_protein_g}g | ambiguity=${classification.ambiguity_score}`
     );
 
     // ── Build system prompt ───────────────────────────────────────────────────
-    const systemPrompt = buildSystemPrompt(mode, dilDish, servings, importedRecipe);
+    const systemPrompt = buildSystemPrompt(
+      mode,
+      dilDish,
+      servings,
+      importedRecipe,
+      classificationRules
+    );
 
     const generationPromise = (async (): Promise<GenerateResponse> => {
       const model = quickCloseMatch ? DEFAULT_QUICK_MODEL : DEFAULT_FULL_MODEL;
@@ -935,6 +986,8 @@ export async function POST(req: NextRequest) {
           dilRecognised: !!dilDish,
           servings,
           versions: versionsWithValidation,
+          classification: toClassificationWire(classification),
+          classificationFull: classification,
         };
 
         const shouldRetryBiryani =

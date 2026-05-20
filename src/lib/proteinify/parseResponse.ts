@@ -2,6 +2,7 @@ import type {
   AdditionItem,
   Ingredient,
   IngredientSwapOption,
+  DishClassificationSummary,
   ProteinifyResponse,
   RecipeDifficulty,
   RecipeVersion,
@@ -292,7 +293,61 @@ export function parseRecipeVersion(raw: unknown): RecipeVersion | null {
 
 export type ParseResult =
   | { ok: true; data: ProteinifyResponse }
+  | {
+      needsDisambiguation: true;
+      assumedVariant: string | null;
+      possibleVariants: string[];
+      dishName: string;
+      classification?: DishClassificationSummary;
+      classificationFull?: ProteinifyResponse["classificationFull"];
+    }
   | { ok: false; error: string };
+
+export function isParseSuccess(r: ParseResult): r is { ok: true; data: ProteinifyResponse } {
+  return "ok" in r && r.ok === true;
+}
+
+export function isParseFailure(r: ParseResult): r is { ok: false; error: string } {
+  return "ok" in r && r.ok === false;
+}
+
+function parseClassificationSummary(raw: unknown): DishClassificationSummary | undefined {
+  if (!isRecord(raw)) return undefined;
+  if (!isNumber(raw.baseline_protein_g) || !isString(raw.dish_type)) return undefined;
+  return {
+    baseline_protein_g: raw.baseline_protein_g,
+    dish_type: raw.dish_type,
+    assumed_variant: isString(raw.assumed_variant) ? raw.assumed_variant : null,
+    texture_critical: raw.texture_critical === true,
+    dietary_flags: Array.isArray(raw.dietary_flags)
+      ? raw.dietary_flags.filter(isString)
+      : [],
+    ...(raw.ambiguity_score === "low" ||
+    raw.ambiguity_score === "medium" ||
+    raw.ambiguity_score === "high"
+      ? { ambiguity_score: raw.ambiguity_score }
+      : {}),
+  };
+}
+
+export function parseDisambiguationResponse(json: unknown): Extract<ParseResult, { needsDisambiguation: true }> | null {
+  if (!isRecord(json) || json.needsDisambiguation !== true) return null;
+  const variants = Array.isArray(json.possibleVariants)
+    ? json.possibleVariants.filter(isString)
+    : [];
+  if (variants.length < 2) return null;
+  return {
+    needsDisambiguation: true,
+    assumedVariant: isString(json.assumedVariant) ? json.assumedVariant : null,
+    possibleVariants: variants,
+    dishName: isString(json.dishName) ? json.dishName : "",
+    classification: parseClassificationSummary(json.classification),
+    classificationFull:
+      json.classificationFull && typeof json.classificationFull === "object"
+        ? (json.classificationFull as ProteinifyResponse["classificationFull"])
+        : undefined,
+  };
+}
 
 /**
  * Validates the wire JSON matches the strict Proteinify contract (shape + version ids/labels).
@@ -356,6 +411,9 @@ export function parseSingleVersionAiJson(
 }
 
 export function parseProteinifyResponseJson(json: unknown): ParseResult {
+  const disambiguation = parseDisambiguationResponse(json);
+  if (disambiguation) return disambiguation;
+
   if (!isRecord(json)) return { ok: false, error: "Response is not a JSON object." };
 
   const inputDish = isString(json.inputDish)
@@ -501,10 +559,18 @@ export function parseProteinifyResponseJson(json: unknown): ParseResult {
   if (!v1 || v1.id !== "balanced") return { ok: false, error: "versions[1] must be Balanced." };
   if (!v2 || v2.id !== "max-protein") return { ok: false, error: "versions[2] must be Full Send or Fully Light (id max-protein)." };
 
+  const classification = parseClassificationSummary(json.classification);
+  const classificationFull =
+    json.classificationFull && typeof json.classificationFull === "object"
+      ? (json.classificationFull as ProteinifyResponse["classificationFull"])
+      : undefined;
+
   const data: ProteinifyResponse = {
     inputDish,
     assumptions,
     versions: [v0, v1, v2],
+    ...(classification ? { classification } : {}),
+    ...(classificationFull ? { classificationFull } : {}),
   };
 
   return { ok: true, data };

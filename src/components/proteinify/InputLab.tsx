@@ -26,6 +26,9 @@ type Props = {
   isImporting?: boolean;
   /** True while initial load, full generate, or single-version regeneration */
   disabled?: boolean;
+  disambiguationOptions?: { assumed: string | null; variants: string[] } | null;
+  onPickDisambiguationVariant?: (variant: string) => void;
+  onDisambiguationOther?: () => void;
 };
 
 export default function InputLab({
@@ -46,6 +49,9 @@ export default function InputLab({
   isGenerating,
   isImporting,
   disabled,
+  disambiguationOptions,
+  onPickDisambiguationVariant,
+  onDisambiguationOther,
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [sourceHint, setSourceHint] = useState<string | null>(null);
@@ -243,6 +249,38 @@ export default function InputLab({
                   disabled={disabled}
                   onChange={(v) => onChangeSlider("pantryRealism", v)}
                 />
+              </div>
+            ) : null}
+
+            {disambiguationOptions && disambiguationOptions.variants.length > 1 ? (
+              <div className="rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-offset)] px-3 py-3">
+                <div className="text-xs font-semibold text-[color:var(--text-primary)]">
+                  We see a few versions of this dish — which are you making?
+                </div>
+                {disambiguationOptions.assumed ? (
+                  <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">
+                    Our best guess: {disambiguationOptions.assumed}
+                  </div>
+                ) : null}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {disambiguationOptions.variants.map((variant) => (
+                    <button
+                      key={variant}
+                      type="button"
+                      onClick={() => onPickDisambiguationVariant?.(variant)}
+                      className="rounded-[var(--radius-pill)] border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-primary)] hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
+                    >
+                      {variant}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => onDisambiguationOther?.()}
+                    className="rounded-[var(--radius-pill)] border border-dashed border-[color:var(--divider)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] hover:text-[color:var(--accent)]"
+                  >
+                    Other — I&apos;ll describe it
+                  </button>
+                </div>
               </div>
             ) : null}
 

@@ -35,7 +35,7 @@ We use **`N`** and **`N.M`** (like `3.2`, `4.1`). No third decimal unless you tr
 
 ## Current head
 
-**`6.0`** — concise macro/copy pass with gym-mode-ready copy branch note.
+**`6.2`** — dish pre-classifier (gpt-4o-mini), `buildClassificationRules`, disambiguation UI, baseline badge, recipe-log cache.
 
 Agents: when you finish a *notable* change, **bump the head**, **append a row** to the ledger (newest first), and mention the new ID in your summary.
 
@@ -45,6 +45,8 @@ Agents: when you finish a *notable* change, **bump the head**, **append a row** 
 
 | ID | Date | Source | Summary | Primary areas / files | Revert hints |
 |----|------|--------|---------|-------------------------|--------------|
+| **6.2** | 2026-05-19 | [agent] | **Dish classifier** before generate: dessert/vegan/component/baseline rules; high-ambiguity disambiguation chips; amber high-protein badge; `classification` cached in recipe log | `classifier.ts`, `systemPrompt.ts`, `route.ts`, `ProteinifyApp.tsx`, `InputLab.tsx`, `ResultsPreview.tsx`, `recipeLog.ts`, `parseResponse.ts` | Revert route classifier block + UI props |
+| **6.1** | 2026-05-19 | [agent] | **Biryani:** whey isolate / protein powder **Full Send only** — Balanced uses yogurt-only marinade + optional bone-broth parboil; text guard `whey-biryani-wrong-tier`; cache `v3.2-biryani-whey-full-send-only` | `promptBuilder.ts`, `systemPrompt.ts`, `biryaniTextGuard.ts`, `route.ts`, `biryaniTextGuard.test.ts` | Revert cache key + guard tier check |
 | **6.0** | 2026-04-23 | [agent] | UI copy compression pass: remove redundant macro wording (“baseline/after/delta” verbosity), shorten results helper text, and register as independent copy layer suitable for a future **gym-mode tone profile** | `src/components/proteinify/VersionCard.tsx`, `src/components/proteinify/ResultsPreview.tsx`, `docs/EVOLUTION.md` | Restore prior strings in those files |
 | **5.1** | 2026-04-10 | [agent] | Expanded evolution ledger with **full backfill** of agent work from transcripts (no git) | `docs/EVOLUTION.md` | Remove redundant rows; restore shorter ledger |
 | **5.0** | 2026-04-10 | [agent] | Introduced **EVOLUTION.md** + pointer in `.cursorrules` for cross-session tracking | `docs/EVOLUTION.md`, `.cursorrules` | Delete `docs/EVOLUTION.md` section from `.cursorrules` |

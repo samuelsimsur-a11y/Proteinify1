@@ -7,6 +7,8 @@ import {
   withApiBase,
 } from "../apiBaseUrl";
 import {
+  isParseFailure,
+  isParseSuccess,
   parseProteinifyResponseJson,
   parseRecipeVersion,
   type ParseResult,
@@ -78,12 +80,35 @@ export type StreamFullOptions = {
   onVersion?: (index: number, version: RecipeVersion) => void;
 };
 
+export type QuickCloseMatchResult =
+  | { ok: true; version: RecipeVersion }
+  | { ok: false; error: string }
+  | {
+      needsDisambiguation: true;
+      assumedVariant: string | null;
+      possibleVariants: string[];
+      dishName: string;
+    };
+
 export async function generateQuickCloseMatch(
   body: GenerateApiRequestBody
-): Promise<{ ok: true; version: RecipeVersion } | { ok: false; error: string }> {
+): Promise<QuickCloseMatchResult> {
   const baseBody: GenerateApiRequestBody = { ...body, quickCloseMatch: true };
   const result = await postGenerate(baseBody);
-  if (!result.ok) return { ok: false, error: result.error };
+  if (isParseFailure(result)) {
+    return { ok: false, error: result.error };
+  }
+  if ("needsDisambiguation" in result) {
+    return {
+      needsDisambiguation: true,
+      assumedVariant: result.assumedVariant,
+      possibleVariants: result.possibleVariants,
+      dishName: result.dishName,
+    };
+  }
+  if (!isParseSuccess(result)) {
+    return { ok: false, error: "Unexpected response shape." };
+  }
   const close = result.data.versions.find((v) => v.id === "close-match") ?? result.data.versions[0];
   if (!close) return { ok: false, error: "Quick close-match was unavailable." };
   return { ok: true, version: close };
