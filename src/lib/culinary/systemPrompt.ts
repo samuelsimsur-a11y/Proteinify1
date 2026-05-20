@@ -396,8 +396,55 @@ const RECIPE_QUALITY = `
 - If a heat note or technique caution is needed, it must appear only in **heatGuard** or **textureNote** on the instruction object — never as improvised tags inside **step** text.
 `.trim();
 
+function buildIngredientCompatibilityRules(classification: DishClassification): string {
+  const method = classification.cooking_method;
+  const lines: string[] = [
+    "## Ingredient compatibility (pre-classified cooking method)",
+    "",
+    "Match protein levers to how this dish is actually cooked. Never pair ingredients that fight the dish's heat, moisture, or structure.",
+  ];
+
+  if (method === "bake" || classification.dish_type === "dessert") {
+    lines.push(
+      "- Baked mixtures above 150°C: no whey or fast-hydrating protein powder in batter; casein, egg white, almond flour, or cold-folded Greek yogurt only.",
+      "- Do not add broth or stock to set batters, cookie dough, or cake batter."
+    );
+  }
+  if (method === "steam") {
+    lines.push(
+      "- Steamed wrappers/dough: never add protein powder to the dough; boost filling or portion only.",
+      "- Keep wrapper elasticity — no high free-water ingredients in the dough matrix."
+    );
+  }
+  if (method === "fry" || method === "grill") {
+    lines.push(
+      "- Fried/grilled anchors: prefer native protein portion, leaner cuts, or yogurt/marinade off-heat — not watery dairy floods that spatter or break crust.",
+      "- Avoid brothy dilution of pan sauces unless the dish is already broth-forward."
+    );
+  }
+  if (method === "boil" || method === "mixed") {
+    lines.push(
+      "- Boiled grains/noodles: broth or stock only where the dish already uses a simmering liquid lane — not as a random pour-over.",
+      "- Whey only in cold-set or off-heat folds unless dessert rules say otherwise."
+    );
+  }
+  if (method === "raw" || method === "no_cook") {
+    lines.push(
+      "- Raw/no-cook: whey and casein are safe when fully dissolved cold; never heat above 70°C after adding whey.",
+      "- No meat or fish additions to dishes that are traditionally raw unless the dish identity already includes them."
+    );
+  }
+
+  lines.push(
+    "- Acid + dairy: buffer yogurt/whey in marinades; never boil unprotected whey.",
+    "- Konjac, cauliflower rice, and lentil-heavy grain swaps only when DIL or classification component rules explicitly allow them."
+  );
+
+  return lines.join("\n");
+}
+
 export function buildClassificationRules(classification: DishClassification): string {
-  const parts: string[] = [];
+  const parts: string[] = [buildIngredientCompatibilityRules(classification)];
 
   if (classification.baseline_protein_g >= 35) {
     parts.push(`
@@ -546,8 +593,8 @@ without texture risk, label it honestly:
     );
   }
 
-  if (parts.length === 0) return "";
-  return parts.join("\n\n");
+  const body = parts.filter((p) => p.trim().length > 0).join("\n\n");
+  return body.trim();
 }
 
 export function buildSystemPrompt(

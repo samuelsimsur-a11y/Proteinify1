@@ -1,0 +1,21 @@
+{
+  "$comment": "Documentary schema for POST /api/generate JSON responses (not sent to the LLM). Model output uses proteinify_schema.json only.",
+  "type": "object",
+  "properties": {
+    "classification": {
+      "type": "object",
+      "properties": {
+        "baseline_protein_g": { "type": "number" },
+        "dish_type": { "type": "string" },
+        "assumed_variant": { "type": ["string", "null"] },
+        "texture_critical": { "type": "boolean" },
+        "dietary_flags": { "type": "array", "items": { "type": "string" } },
+        "ambiguity_score": { "type": "string", "enum": ["low", "medium", "high"] }
+      }
+    },
+    "needsDisambiguation": { "type": "boolean" },
+    "possibleVariants": { "type": "array", "items": { "type": "string" } },
+    "assumedVariant": { "type": ["string", "null"] },
+    "dishName": { "type": "string" }
+  }
+}

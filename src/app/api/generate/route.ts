@@ -25,6 +25,12 @@ import {
   type DishClassification,
   type DishClassificationWire,
 } from "@/lib/culinary/classifier";
+import {
+  checkClassificationTierText,
+  classificationHitsToValidationResult,
+  CLASSIFICATION_GENERATION_RETRY_USER_APPEND,
+  hasClassificationTextBlockers,
+} from "@/lib/culinary/classificationTextGuard";
 import { buildClassificationRules, buildSystemPrompt, type Mode } from "@/lib/culinary/systemPrompt";
 import { API_CORS_HEADERS, withCorsHeaders } from "@/lib/http/cors";
 import type { DishDNA, SwapInput, UserGoal, ValidationResult } from "@/lib/culinary/dil/schemas";
@@ -115,7 +121,7 @@ function getOpenAI(): OpenAI {
 // without reducing quality or changing model behavior.
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 120;
-const CACHE_SCHEMA_VERSION = "v3.3-dish-classifier";
+const CACHE_SCHEMA_VERSION = "v3.4-dish-classifier-heuristics";
 const responseCache = new Map<string, { expiresAt: number; value: GenerateResponse }>();
 const inflightRequests = new Map<string, Promise<GenerateResponse>>();
 // sharedRecipe + 3 tiers still needs headroom; truncation yields invalid JSON and 502s.
@@ -584,9 +590,11 @@ type MergedVersionRow = Omit<
 function annotateVersionsWithDil(
   mergedVersions: MergedVersionRow[],
   dilDish: DishDNA | null,
-  userGoal: UserGoal | undefined
-): { versions: VersionResult[]; biryaniTextBlockers: boolean } {
+  userGoal: UserGoal | undefined,
+  classification: DishClassification
+): { versions: VersionResult[]; biryaniTextBlockers: boolean; classificationTextBlockers: boolean } {
   let biryaniTextBlockers = false;
+  let classificationTextBlockers = false;
 
   const versions: VersionResult[] = mergedVersions.map((version) => {
     const proteinMathWarning = checkProteinMath(version);
@@ -613,18 +621,17 @@ function annotateVersionsWithDil(
     let textValidation: ValidationResult | null = null;
     let dilConsistencyWarning: string | null = null;
 
+    const tierTextSource = {
+      summary: version.summary,
+      swapSummary: version.swapSummary,
+      transformationByComponent: version.transformationByComponent,
+      methodAdjustments: version.methodAdjustments,
+      ingredients: version.ingredients,
+      instructions: version.instructions,
+    };
+
     if (dilDish?.id === "biryani") {
-      const textHits = checkBiryaniTierText(
-        {
-          summary: version.summary,
-          swapSummary: version.swapSummary,
-          transformationByComponent: version.transformationByComponent,
-          methodAdjustments: version.methodAdjustments,
-          ingredients: version.ingredients,
-          instructions: version.instructions,
-        },
-        version.name
-      );
+      const textHits = checkBiryaniTierText(tierTextSource, version.name);
       textValidation = biryaniTextHitsToValidationResult(textHits);
       dilConsistencyWarning = buildDilConsistencyWarning(version.name, textHits);
       if (textHits.length > 0) {
@@ -637,7 +644,24 @@ function annotateVersionsWithDil(
       }
     }
 
-    const dilValidation = mergeValidationResults(swapValidation, textValidation);
+    const classificationHits = checkClassificationTierText(classification, tierTextSource);
+    const classificationValidation = classificationHitsToValidationResult(classificationHits);
+    if (classificationHits.length > 0) {
+      console.warn(
+        `[classifier:text] "${version.name}" hits=${classificationHits.map((h) => `${h.code}(${h.matchedPhrase})`).join("; ")}`
+      );
+      if (hasClassificationTextBlockers(classificationHits)) {
+        classificationTextBlockers = true;
+        if (!dilConsistencyWarning) {
+          dilConsistencyWarning = `${version.name}: conflicts with dish classification (${classificationHits.map((h) => h.code).join(", ")}).`;
+        }
+      }
+    }
+
+    const dilValidation = mergeValidationResults(
+      mergeValidationResults(swapValidation, textValidation),
+      classificationValidation
+    );
 
     return {
       ...version,
@@ -647,7 +671,7 @@ function annotateVersionsWithDil(
     };
   });
 
-  return { versions, biryaniTextBlockers };
+  return { versions, biryaniTextBlockers, classificationTextBlockers };
 }
 
 // ─── User message builder ─────────────────────────────────────────────────────
@@ -905,8 +929,13 @@ export async function POST(req: NextRequest) {
       const model = quickCloseMatch ? DEFAULT_QUICK_MODEL : DEFAULT_FULL_MODEL;
       const maxTokens = quickCloseMatch ? QUICK_CLOSE_MAX_TOKENS : MAX_COMPLETION_TOKENS;
       const proteinifySchema = patchCompactProteinifySchema(getProteinifySchema());
-      const maxAttempts =
-        dilDish?.id === "biryani" && !quickCloseMatch ? 2 : 1;
+      const needsGuardRetry =
+        !quickCloseMatch &&
+        (dilDish?.id === "biryani" ||
+          classification.dish_type === "dessert" ||
+          classification.dietary_flags.length > 0 ||
+          classification.dish_components.length > 1);
+      const maxAttempts = needsGuardRetry ? 2 : 1;
 
       let userContent = buildUserMessage(dishInput, mode, servings, sliders, {
         quick: Boolean(quickCloseMatch),
@@ -973,11 +1002,8 @@ export async function POST(req: NextRequest) {
         const dishOut = typeof parsedObj.dish === "string" ? parsedObj.dish : dishInput;
         const taglineOut = typeof parsedObj.tagline === "string" ? parsedObj.tagline : "";
 
-        const { versions: versionsWithValidation, biryaniTextBlockers } = annotateVersionsWithDil(
-          mergedVersions,
-          dilDish,
-          userGoal
-        );
+        const { versions: versionsWithValidation, biryaniTextBlockers, classificationTextBlockers } =
+          annotateVersionsWithDil(mergedVersions, dilDish, userGoal, classification);
 
         lastResponse = {
           dish: dishOut,
@@ -990,13 +1016,19 @@ export async function POST(req: NextRequest) {
           classificationFull: classification,
         };
 
-        const shouldRetryBiryani =
-          biryaniTextBlockers && attempt < maxAttempts - 1;
-        if (shouldRetryBiryani) {
+        const shouldRetryGuards =
+          (biryaniTextBlockers || classificationTextBlockers) && attempt < maxAttempts - 1;
+        if (shouldRetryGuards) {
           console.warn(
-            `[generate] biryani text guard triggered retry (attempt ${attempt + 1}/${maxAttempts})`
+            `[generate] text guard retry (attempt ${attempt + 1}/${maxAttempts}) biryani=${biryaniTextBlockers} classification=${classificationTextBlockers}`
           );
-          userContent = `${userContent}\n\n${BIRYANI_GENERATION_RETRY_USER_APPEND}`;
+          const append = [
+            biryaniTextBlockers ? BIRYANI_GENERATION_RETRY_USER_APPEND : "",
+            classificationTextBlockers ? CLASSIFICATION_GENERATION_RETRY_USER_APPEND : "",
+          ]
+            .filter(Boolean)
+            .join("\n\n");
+          userContent = `${userContent}\n\n${append}`;
           continue;
         }
 
