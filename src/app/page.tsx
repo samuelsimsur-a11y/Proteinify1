@@ -1,4 +1,4 @@
-import WiseDishApp from "@/components/proteinify/ProteinifyApp";
+import WiseDishApp from "@/components/wisedish/WiseDishApp";
 
 export default function Page() {
   return <WiseDishApp />;

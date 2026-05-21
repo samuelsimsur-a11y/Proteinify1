@@ -28,7 +28,7 @@ async function postGenerate(dish) {
   const res = await fetch(`${BASE}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dish, mode: "proteinify", servings: 1 }),
+    body: JSON.stringify({ dish, mode: "wisedish", servings: 1 }),
   });
   const json = await res.json();
   return { status: res.status, json };

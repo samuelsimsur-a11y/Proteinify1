@@ -37,7 +37,7 @@ export default function AppVersionReload() {
       if (localStorage.getItem(EPOCH_KEY) !== EPOCH_MARK) {
         localStorage.setItem(EPOCH_KEY, EPOCH_MARK);
         localStorage.removeItem(LEGACY_EPOCH_KEY);
-        const current = process.env.NEXT_PUBLIC_FOODZAP_BUILD_ID;
+        const current = process.env.NEXT_PUBLIC_WISEDISH_BUILD_ID;
         if (current && current !== "local") {
           localStorage.setItem(BUILD_KEY, current);
         }
@@ -45,7 +45,7 @@ export default function AppVersionReload() {
         return;
       }
 
-      const current = process.env.NEXT_PUBLIC_FOODZAP_BUILD_ID;
+      const current = process.env.NEXT_PUBLIC_WISEDISH_BUILD_ID;
       if (!current || current === "local") return;
 
       const prev = localStorage.getItem(BUILD_KEY);

@@ -1,5 +1,5 @@
 {
-  "name": "proteinify",
+  "name": "wisedish",
   "private": true,
   "version": "0.1.0",
   "scripts": {
@@ -11,9 +11,9 @@
     "dev:local": "next dev --webpack --port 3000",
     "build": "npm run guard:server-build && next build",
     "icons:android": "node scripts/generate-android-icons.cjs",
-    "build:android": "npm run guard:android-build && npm run icons:android && FOODZAP_STATIC_EXPORT=true next build && npx cap sync android",
-    "guard:server-build": "node -e \"if (process.env.FOODZAP_STATIC_EXPORT === 'true') { console.error('FOODZAP_STATIC_EXPORT must be unset for serverful builds. Use npm run build:android for static export.'); process.exit(1); }\"",
-    "guard:android-build": "node -e \"if (process.env.FOODZAP_STATIC_EXPORT && process.env.FOODZAP_STATIC_EXPORT !== 'true') { console.error('FOODZAP_STATIC_EXPORT must be true for Android static builds.'); process.exit(1); }\"",
+    "build:android": "npm run guard:android-build && npm run icons:android && WISEDISH_STATIC_EXPORT=true next build && npx cap sync android",
+    "guard:server-build": "node -e \"if (process.env.WISEDISH_STATIC_EXPORT === 'true') { console.error('WISEDISH_STATIC_EXPORT must be unset for serverful builds. Use npm run build:android for static export.'); process.exit(1); }\"",
+    "guard:android-build": "node -e \"if (process.env.WISEDISH_STATIC_EXPORT && process.env.WISEDISH_STATIC_EXPORT !== 'true') { console.error('WISEDISH_STATIC_EXPORT must be true for Android static builds.'); process.exit(1); }\"",
     "android": "npx cap run android",
     "android:open": "npx cap open android",
     "android:restart": "npm run build:android && npx cap run android",

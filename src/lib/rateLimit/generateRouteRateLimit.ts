@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 
-const SHORT_STORE_KEY = "__proteinify_generate_ip_rl_short_v1" as const;
-const DAILY_STORE_KEY = "__proteinify_generate_ip_rl_daily_v1" as const;
+const SHORT_STORE_KEY = "__wisedish_generate_ip_rl_short_v1" as const;
+const DAILY_STORE_KEY = "__wisedish_generate_ip_rl_daily_v1" as const;
 
 type ShortWindowCounter = { count: number; windowStart: number };
 type DailyCounter = { count: number; date: string };

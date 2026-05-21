@@ -4,8 +4,8 @@ import Script from "next/script";
 import "./globals.css";
 
 import AppVersionReload from "@/components/AppVersionReload";
-import Header from "@/components/proteinify/Header";
-import FooterCta from "@/components/proteinify/FooterCta";
+import Header from "@/components/wisedish/Header";
+import FooterCta from "@/components/wisedish/FooterCta";
 
 export const metadata: Metadata = {
   title: "Wise Dish",

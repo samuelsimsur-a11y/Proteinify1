@@ -12,7 +12,7 @@ function productionWebUrl(): string {
   if (site) {
     return site.endsWith("/") ? site.slice(0, -1) : site;
   }
-  return "https://foodzap-khaki.vercel.app";
+  return "https://wisedish.vercel.app";
 }
 
 const config: CapacitorConfig = {

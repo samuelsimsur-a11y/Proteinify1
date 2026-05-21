@@ -5,7 +5,7 @@ This roadmap captures deeper improvements after Stage A quick hardening ships.
 ## B1 Shared Resilient Transport
 
 - Extract a single client transport utility used by:
-  - `src/lib/proteinify/clientGenerate.ts`
+  - `src/lib/wisedish/clientGenerate.ts`
   - `src/lib/import/clientImport.ts`
 - Shared concerns:
   - timeout budget

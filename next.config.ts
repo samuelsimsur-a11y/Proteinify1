@@ -6,26 +6,26 @@ import { API_CORS_HEADERS } from "./src/lib/http/cors";
  * when you bundle the web assets locally. Vercel must NOT use this: deploy a normal Next build
  * so `/api/generate` and `/api/import` exist as serverless routes.
  *
- * Local: `FOODZAP_STATIC_EXPORT=true npm run build && npx cap sync android`
+ * Local: `WISEDISH_STATIC_EXPORT=true npm run build && npx cap sync android`
  */
-const staticExport = process.env.FOODZAP_STATIC_EXPORT === "true";
+const staticExport = process.env.WISEDISH_STATIC_EXPORT === "true";
 const onVercel = process.env.VERCEL === "1";
 
 if (staticExport && onVercel) {
   throw new Error(
-    "FOODZAP_STATIC_EXPORT=true is only for local Android sync. Disable it for Vercel/serverful deployments."
+    "WISEDISH_STATIC_EXPORT=true is only for local Android sync. Disable it for Vercel/serverful deployments."
   );
 }
 
 /** Changes every Vercel deploy so the client can bust stale WebView caches. */
-const FOODZAP_BUILD_ID =
+const WISEDISH_BUILD_ID =
   process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || "local";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   ...(staticExport ? { output: "export" as const } : {}),
   env: {
-    NEXT_PUBLIC_FOODZAP_BUILD_ID: FOODZAP_BUILD_ID,
+    NEXT_PUBLIC_WISEDISH_BUILD_ID: WISEDISH_BUILD_ID,
   },
   turbopack: {
     root: __dirname,

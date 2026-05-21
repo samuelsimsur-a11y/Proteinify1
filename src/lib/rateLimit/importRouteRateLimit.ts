@@ -1,4 +1,4 @@
-const STORE_KEY = "__proteinify_import_ip_rl_v1" as const;
+const STORE_KEY = "__wisedish_import_ip_rl_v1" as const;
 
 type Timestamps = number[];
 

@@ -9,10 +9,10 @@ import {
   buildConstraintPromptFragment,
 } from "@/lib/culinary/dil/promptBuilder";
 
-export type Mode = "proteinify" | "lean" | "veggify";
+export type Mode = "wisedish" | "lean" | "veggify";
 
 const MODE_INSTRUCTIONS: Record<Mode, string> = {
-  proteinify: `
+  wisedish: `
 TRANSFORMATION GOAL: Raise protein per serving while keeping dish identity intact. Secondarily, trim gratuitous
 fat and compress obvious carb load **only** where a structure-safe substitute exists — never sacrifice texture
 grammar for a macro gimmick.

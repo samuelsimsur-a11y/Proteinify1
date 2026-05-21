@@ -11,7 +11,7 @@ const CASES = [
   {
     name: "Chocolate Lava Cake",
     dish: "Chocolate Lava Cake",
-    mode: "proteinify",
+    mode: "wisedish",
     expectDisambiguation: false,
     check(body) {
       const issues = [];
@@ -32,7 +32,7 @@ const CASES = [
   {
     name: "Vegan Lentil Dal",
     dish: "Vegan Lentil Dal",
-    mode: "proteinify",
+    mode: "wisedish",
     check(body) {
       const issues = [];
       const text = JSON.stringify(body).toLowerCase();
@@ -48,7 +48,7 @@ const CASES = [
   {
     name: "Jollof Rice",
     dish: "Jollof Rice",
-    mode: "proteinify",
+    mode: "wisedish",
     check(body) {
       const issues = [];
       const text = JSON.stringify(body.versions || []).toLowerCase();
@@ -61,7 +61,7 @@ const CASES = [
   {
     name: "Chicken Tikka",
     dish: "Chicken Tikka",
-    mode: "proteinify",
+    mode: "wisedish",
     check(body) {
       const issues = [];
       if ((body.classification?.baseline_protein_g ?? 0) < 35) {
@@ -77,7 +77,7 @@ const CASES = [
   {
     name: "Dumplings",
     dish: "Dumplings",
-    mode: "proteinify",
+    mode: "wisedish",
     expectDisambiguation: true,
     check(body) {
       const issues = [];

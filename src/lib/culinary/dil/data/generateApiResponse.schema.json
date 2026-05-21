@@ -1,5 +1,5 @@
 {
-  "$comment": "Documentary schema for POST /api/generate JSON responses (not sent to the LLM). Model output uses proteinify_schema.json only.",
+  "$comment": "Documentary schema for POST /api/generate JSON responses (not sent to the LLM). Model output uses wisedish_schema.json only.",
   "type": "object",
   "properties": {
     "classification": {

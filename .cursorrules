@@ -349,7 +349,7 @@ Sprint 1 targets (add in this order — failure-rate ordered, not prestige-order
 
 ---
 
-## Proteinify app (outside DIL)
+## Wise Dish app (outside DIL)
 
 - **Change history & version IDs** for the UI and recipe-generation workstream: `docs/EVOLUTION.md`  
-- When making a **notable** Proteinify change (cards, prompts, API), append to the ledger and bump the version ID per the rules in that file.
+- When making a **notable** WiseDish change (cards, prompts, API), append to the ledger and bump the version ID per the rules in that file.

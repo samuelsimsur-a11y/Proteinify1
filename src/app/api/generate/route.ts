@@ -8,8 +8,8 @@ import OpenAI from "openai";
 import { getServerEnv } from "@/lib/config/env";
 import { checkGenerateRateLimit, getClientIp } from "@/lib/rateLimit/generateRouteRateLimit";
 import { getDishByIdOrAlias, validateDILIntegrity } from "@/lib/culinary/dil/loader";
-import { getProteinifySchema } from "@/lib/culinary/dil/loadProteinifySchema";
-import { patchCompactProteinifySchema } from "@/lib/proteinify/ai/compactSchemaPatch";
+import { getWisedishSchema } from "@/lib/culinary/dil/loadWisedishSchema";
+import { patchCompactWiseDishSchema } from "@/lib/wisedish/ai/compactSchemaPatch";
 import {
   BIRYANI_GENERATION_RETRY_USER_APPEND,
   biryaniTextHitsToValidationResult,
@@ -851,7 +851,7 @@ export async function POST(req: NextRequest) {
       cachedClassification,
     } = body;
 
-    const mode = requestMode ?? transformationMode ?? "proteinify";
+    const mode = requestMode ?? transformationMode ?? "wisedish";
 
     if (!dishInput || !mode) {
       return jsonResponse({ error: "dish and mode are required", code: "INVALID_REQUEST" }, requestId, { status: 400 });
@@ -928,7 +928,7 @@ export async function POST(req: NextRequest) {
     const generationPromise = (async (): Promise<GenerateResponse> => {
       const model = quickCloseMatch ? DEFAULT_QUICK_MODEL : DEFAULT_FULL_MODEL;
       const maxTokens = quickCloseMatch ? QUICK_CLOSE_MAX_TOKENS : MAX_COMPLETION_TOKENS;
-      const proteinifySchema = patchCompactProteinifySchema(getProteinifySchema());
+      const wisedishSchema = patchCompactWiseDishSchema(getWisedishSchema());
       const needsGuardRetry =
         !quickCloseMatch &&
         (dilDish?.id === "biryani" ||
@@ -951,7 +951,7 @@ export async function POST(req: NextRequest) {
           response_format: {
             type: "json_schema",
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            json_schema: proteinifySchema as any,
+            json_schema: wisedishSchema as any,
           },
           messages: [
             {

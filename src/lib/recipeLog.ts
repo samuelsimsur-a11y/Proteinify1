@@ -17,12 +17,24 @@ export interface SavedRecipe {
 }
 
 const STORAGE_KEY = "wisedish_recipe_log";
+/** Pre-rebrand localStorage keys — read-only migration */
 const LEGACY_STORAGE_KEY = "foodzap_recipe_log";
 const MAX_RECIPES = 50;
 export const SELECTED_RECIPE_KEY = "wisedish_selected_recipe_id";
 const LEGACY_SELECTED_RECIPE_KEY = "foodzap_selected_recipe_id";
 export const RECIPE_LOG_EVENT = "wisedish-recipe-log-updated";
 const LEGACY_RECIPE_LOG_EVENT = "foodzap-recipe-log-updated";
+
+export function normalizeSavedRecipeMode(mode: string): string {
+  return mode === "proteinify" ? "wisedish" : mode;
+}
+
+function modeMatches(savedMode: string, requestedMode: string): boolean {
+  return (
+    savedMode === requestedMode ||
+    normalizeSavedRecipeMode(savedMode) === normalizeSavedRecipeMode(requestedMode)
+  );
+}
 
 /** In-memory fallback when both storages are blocked (e.g. strict private mode). */
 const memoryStore = new Map<string, string>();
@@ -263,7 +275,9 @@ export function getSavedRecipes(): SavedRecipe[] {
 }
 
 export function getSavedRecipe(dishName: string, mode: string, sliderKey: string = ""): SavedRecipe | null {
-  const hit = readRecipes().find((r) => r.dishName === dishName && r.mode === mode && (r.sliderKey ?? "") === sliderKey);
+  const hit = readRecipes().find(
+    (r) => r.dishName === dishName && modeMatches(r.mode, mode) && (r.sliderKey ?? "") === sliderKey
+  );
   return hit ?? null;
 }
 
@@ -271,7 +285,7 @@ export function getSavedRecipe(dishName: string, mode: string, sliderKey: string
 export function getLatestSavedRecipeByDishMode(dishName: string, mode: string): SavedRecipe | null {
   const normalizedDish = dishName.trim().toLowerCase();
   const hit = readRecipes()
-    .filter((r) => r.dishName === normalizedDish && r.mode === mode)
+    .filter((r) => r.dishName === normalizedDish && modeMatches(r.mode, mode))
     .sort((a, b) => b.savedAt - a.savedAt)[0];
   return hit ?? null;
 }

@@ -1,11 +1,10 @@
 const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
 const rawFallbacks = process.env.NEXT_PUBLIC_API_FALLBACK_URLS?.trim() ?? "";
 /** Primary production Wise Dish deployment (SPA + `/api/*`). */
-const PRODUCTION_API_BASE = "https://foodzap-khaki.vercel.app";
-const LEGACY_PRODUCTION_API_BASE = "https://proteinify1.vercel.app";
+const PRODUCTION_API_BASE = "https://wisedish.vercel.app";
 const CAPACITOR_PRIMARY_API_BASE_URL = PRODUCTION_API_BASE;
-const CAPACITOR_SECONDARY_API_BASE_URL = LEGACY_PRODUCTION_API_BASE;
 const LAST_GOOD_API_ORIGIN_KEY = "wisedish_last_good_api_origin";
+/** Pre-rebrand Capacitor / WebView localStorage — read-only migration */
 const LEGACY_LAST_GOOD_API_ORIGIN_KEY = "foodzap_last_good_api_origin";
 
 /** Stable production API host for cross-origin fallback. */
@@ -50,7 +49,6 @@ export function getApiBaseCandidates(): string[] {
   for (const fallback of API_FALLBACKS) unique.add(fallback);
   if (shouldUseCapacitorFallback()) {
     unique.add(CAPACITOR_PRIMARY_API_BASE_URL);
-    unique.add(CAPACITOR_SECONDARY_API_BASE_URL);
   }
   return Array.from(unique);
 }
@@ -128,7 +126,6 @@ export function getApiRequestEndpointCandidates(apiPath: "/api/generate" | "/api
       if (!out.includes(url)) out.push(url);
     };
     push(CAPACITOR_PRIMARY_API_BASE_URL);
-    push(CAPACITOR_SECONDARY_API_BASE_URL);
     for (const fallback of API_FALLBACKS) push(fallback);
     return orderByLastGoodOrigin(out);
   }

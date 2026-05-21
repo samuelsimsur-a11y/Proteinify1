@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Proteinify — reliable local dev: IPv4 bind + clean port + deps check
+# Wise Dish — reliable local dev: IPv4 bind + clean port + deps check
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "==> Proteinify dev (directory: $ROOT)"
+echo "==> Wise Dish dev (directory: $ROOT)"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "ERROR: Node.js is not installed or not in PATH."
