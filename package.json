@@ -17,6 +17,8 @@
     "android": "npx cap run android",
     "android:open": "npx cap open android",
     "android:restart": "npm run build:android && npx cap run android",
+    "android:setup-signing": "bash scripts/android-setup-signing.sh",
+    "android:bundle-release": "npm run build:android && cd android && ./gradlew bundleRelease",
     "start": "next start",
     "start:local": "next start --port 3000",
     "lint": "next lint"

@@ -18,3 +18,8 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 .vercel
+
+# Android release signing
+android/keystore.properties
+android/*.keystore
+android/SIGNING_CREDENTIALS.txt
