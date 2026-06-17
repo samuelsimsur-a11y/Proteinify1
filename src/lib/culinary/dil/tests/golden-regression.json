@@ -168,5 +168,38 @@
       "warnedCodes": ["soft-boiled-egg-alongside"],
       "goalAlternativesShouldMentionVegan": true
     }
+  },
+  {
+    "description": "Pad thai: edamame addition — flavorarch blocker",
+    "dishId": "pad-thai",
+    "swaps": [{ "code": "edamame-pad-thai" }],
+    "options": {},
+    "expected": {
+      "isValid": false,
+      "violationCount": 1,
+      "blockedCodes": ["edamame-pad-thai"]
+    }
+  },
+  {
+    "description": "Falafel: valid protein-boost — no swap codes required",
+    "dishId": "falafel",
+    "swaps": [],
+    "options": { "userGoal": "protein-boost" },
+    "expected": {
+      "isValid": true,
+      "violationCount": 0,
+      "blockedCodes": []
+    }
+  },
+  {
+    "description": "Pho bo: yogurt in broth context — confusion blocker via guard",
+    "dishId": "pho-bo",
+    "swaps": [{ "code": "yogurt-marinade-amplification" }],
+    "options": {},
+    "expected": {
+      "isValid": false,
+      "violationCount": 1,
+      "blockedCodes": ["yogurt-marinade-amplification"]
+    }
   }
 ]

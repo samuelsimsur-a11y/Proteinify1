@@ -9,16 +9,18 @@ import { getServerEnv } from "@/lib/config/env";
 import { checkGenerateRateLimit, getClientIp } from "@/lib/rateLimit/generateRouteRateLimit";
 import { getDishByIdOrAlias, validateDILIntegrity } from "@/lib/culinary/dil/loader";
 import { getWisedishSchema } from "@/lib/culinary/dil/loadWisedishSchema";
-import { patchCompactWiseDishSchema } from "@/lib/wisedish/ai/compactSchemaPatch";
+import { patchWiseDishSchemaForDil } from "@/lib/wisedish/ai/dilSchemaPatch";
+import {
+  checkCataloguedDishTierText,
+  dishTextRetryAppend,
+  hasCataloguedDishTextBlockers,
+} from "@/lib/culinary/dil/dishTextGuard";
+import { isCataloguedDilDish } from "@/lib/culinary/dil/dishTransformationAddons";
+import { validateSwap } from "@/lib/culinary/dil/validator";
 import {
   BIRYANI_GENERATION_RETRY_USER_APPEND,
-  biryaniTextHitsToValidationResult,
-  buildDilConsistencyWarning,
-  checkBiryaniTierText,
-  hasBiryaniTextBlockers,
   mergeValidationResults,
 } from "@/lib/culinary/dil/biryaniTextGuard";
-import { validateSwap } from "@/lib/culinary/dil/validator";
 import {
   classifyDish,
   toClassificationWire,
@@ -32,6 +34,15 @@ import {
   hasClassificationTextBlockers,
 } from "@/lib/culinary/classificationTextGuard";
 import { buildClassificationRules, buildSystemPrompt, type Mode } from "@/lib/culinary/systemPrompt";
+import {
+  bucketSliderForCache,
+  buildUserIntentBlock,
+  CLOSE_MATCH_RETRY_APPEND,
+  findCloseMatchProteinViolation,
+  normalizeSlidersFromRequest,
+  responseHasBlockerViolations,
+  type NormalizedSliders,
+} from "@/lib/culinary/promptLayers/userIntent";
 import { API_CORS_HEADERS, withCorsHeaders } from "@/lib/http/cors";
 import type { DishDNA, SwapInput, UserGoal, ValidationResult } from "@/lib/culinary/dil/schemas";
 
@@ -121,7 +132,7 @@ function getOpenAI(): OpenAI {
 // without reducing quality or changing model behavior.
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 120;
-const CACHE_SCHEMA_VERSION = "v3.4-dish-classifier-heuristics";
+const CACHE_SCHEMA_VERSION = "v3.5-sliders-user-intent";
 const responseCache = new Map<string, { expiresAt: number; value: GenerateResponse }>();
 const inflightRequests = new Map<string, Promise<GenerateResponse>>();
 // sharedRecipe + 3 tiers still needs headroom; truncation yields invalid JSON and 502s.
@@ -212,8 +223,7 @@ function parseModelJson(raw: string, logContext?: { finishReason?: string | null
 }
 
 function bucketSlider(v: number | undefined): number | null {
-  if (v === undefined || !Number.isFinite(v)) return null;
-  return Math.round(v / 10) * 10;
+  return bucketSliderForCache(v);
 }
 
 function buildCacheKey(input: {
@@ -221,16 +231,15 @@ function buildCacheKey(input: {
   mode: Mode;
   servings: number;
   userGoal?: UserGoal;
-  sliders?: GenerateRequest["sliders"];
+  sliders?: NormalizedSliders;
+  addVeggies?: boolean;
   importedRecipe?: GenerateRequest["importedRecipe"];
   quickCloseMatch?: boolean;
 }): string {
   const sliderPart = JSON.stringify({
-    // Bucket sliders to improve cache reuse for near-identical requests.
-    // This acts like a lightweight "data pool" for similar prompts.
-    f: bucketSlider(input.sliders?.flavorPreservation),
-    p: bucketSlider(input.sliders?.proteinAggression),
-    i: bucketSlider(input.sliders?.ingredientRealism),
+    t: bucketSlider(input.sliders?.tasteIntegrity),
+    p: bucketSlider(input.sliders?.proteinBoost),
+    r: bucketSlider(input.sliders?.pantryRealism),
   });
   return JSON.stringify({
     v: CACHE_SCHEMA_VERSION,
@@ -240,6 +249,7 @@ function buildCacheKey(input: {
     servings: input.servings,
     goal: input.userGoal ?? null,
     sliders: sliderPart,
+    veggies: input.addVeggies ?? false,
     importHash: input.importedRecipe
       ? JSON.stringify({
           i: (input.importedRecipe.ingredients ?? []).slice(0, 30),
@@ -275,13 +285,10 @@ interface GenerateRequest {
   mode?: Mode;
   transformationMode?: Mode;
   quickCloseMatch?: boolean;
-  servings?: number;        // NEW — default 1, max 12
+  servings?: number;
   userGoal?: UserGoal;
-  sliders?: {
-    flavorPreservation?: number;
-    proteinAggression?: number;
-    ingredientRealism?: number;
-  };
+  sliders?: NormalizedSliders | Record<string, unknown>;
+  addVeggies?: boolean;
   importedRecipe?: {
     ingredients?: string[];
     instructions?: string[];
@@ -289,7 +296,6 @@ interface GenerateRequest {
     originalTitle?: string;
     confidence?: "high" | "medium" | "low";
   };
-  /** Client recipe-log cache — skips the classifier OpenAI call when present. */
   cachedClassification?: DishClassification;
 }
 
@@ -592,8 +598,8 @@ function annotateVersionsWithDil(
   dilDish: DishDNA | null,
   userGoal: UserGoal | undefined,
   classification: DishClassification
-): { versions: VersionResult[]; biryaniTextBlockers: boolean; classificationTextBlockers: boolean } {
-  let biryaniTextBlockers = false;
+): { versions: VersionResult[]; dishTextBlockers: boolean; classificationTextBlockers: boolean } {
+  let dishTextBlockers = false;
   let classificationTextBlockers = false;
 
   const versions: VersionResult[] = mergedVersions.map((version) => {
@@ -630,16 +636,20 @@ function annotateVersionsWithDil(
       instructions: version.instructions,
     };
 
-    if (dilDish?.id === "biryani") {
-      const textHits = checkBiryaniTierText(tierTextSource, version.name);
-      textValidation = biryaniTextHitsToValidationResult(textHits);
-      dilConsistencyWarning = buildDilConsistencyWarning(version.name, textHits);
-      if (textHits.length > 0) {
+    if (dilDish) {
+      const { hits, validation, consistencyWarning } = checkCataloguedDishTierText(
+        dilDish.id,
+        tierTextSource,
+        version.name
+      );
+      textValidation = validation;
+      dilConsistencyWarning = consistencyWarning;
+      if (hits.length > 0) {
         console.warn(
-          `[dil:text] "${version.name}" hits=${textHits.map((h) => `${h.code}(${h.matchedPhrase})`).join("; ")}`
+          `[dil:text] "${version.name}" hits=${hits.map((h) => `${h.code}(${h.matchedPhrase})`).join("; ")}`
         );
-        if (hasBiryaniTextBlockers(textHits)) {
-          biryaniTextBlockers = true;
+        if (hasCataloguedDishTextBlockers(dilDish.id, hits)) {
+          dishTextBlockers = true;
         }
       }
     }
@@ -671,7 +681,7 @@ function annotateVersionsWithDil(
     };
   });
 
-  return { versions, biryaniTextBlockers, classificationTextBlockers };
+  return { versions, dishTextBlockers, classificationTextBlockers };
 }
 
 // ─── User message builder ─────────────────────────────────────────────────────
@@ -679,18 +689,19 @@ function buildUserMessage(
   dishInput: string,
   mode: Mode,
   servings: number,
-  sliders?: GenerateRequest["sliders"],
-  opts?: { quick?: boolean; dilRecognised?: boolean }
+  sliders?: NormalizedSliders,
+  opts?: { quick?: boolean; dilRecognised?: boolean; addVeggies?: boolean }
 ): string {
+  const intentBlock = buildUserIntentBlock({
+    dish: dishInput,
+    mode,
+    servings,
+    sliders,
+    addVeggies: opts?.addVeggies,
+  });
+
   if (opts?.quick) {
-    const quickLines = [
-      `Transform: ${dishInput}`,
-      `Mode: ${mode}`,
-      `Servings: ${servings}`,
-    ];
-    if (sliders?.flavorPreservation !== undefined) quickLines.push(`Flavor: ${sliders.flavorPreservation}/100`);
-    if (sliders?.proteinAggression !== undefined) quickLines.push(`Protein: ${sliders.proteinAggression}/100`);
-    if (sliders?.ingredientRealism !== undefined) quickLines.push(`Realism: ${sliders.ingredientRealism}/100`);
+    const quickLines = [intentBlock];
     if (opts.dilRecognised) {
       quickLines.push(
         "This dish is in the identity library — honor the DIL section in the system prompt (arcs, physics, texture contrast, swap codes) even in fast mode; do not compress away method truth."
@@ -699,25 +710,11 @@ function buildUserMessage(
     quickLines.push(
       "Return valid schema JSON with one strong Close Match first. Keep all tiers fully coherent and culinary-real, not shorthand."
     );
-    return quickLines.join("\n");
+    return quickLines.join("\n\n");
   }
 
-  const lines = [
-    `Transform: ${dishInput}`,
-    `Mode: ${mode}`,
-    `Servings: ${servings}`,
-  ];
-
-  if (sliders) {
-    if (sliders.flavorPreservation !== undefined)
-      lines.push(`Flavor preservation: ${sliders.flavorPreservation}/100`);
-    if (sliders.proteinAggression !== undefined)
-      lines.push(`Protein aggression: ${sliders.proteinAggression}/100`);
-    if (sliders.ingredientRealism !== undefined)
-      lines.push(`Ingredient realism: ${sliders.ingredientRealism}/100`);
-  }
-
-  lines.push("", "Output shape: ONE sharedRecipe (full baseline) + THREE tiers (Close Match, Balanced, Full Send).");
+  const lines = [intentBlock, ""];
+  lines.push("Output shape: ONE sharedRecipe (full baseline) + THREE tiers (Close Match, Balanced, Full Send).");
   if (opts?.dilRecognised) {
     lines.push(
       "This dish is catalogued in the Dish Identity Library — the system prompt’s DIL block overrides generic shortcuts for identity, texture roles, and swap codes."
@@ -846,12 +843,14 @@ export async function POST(req: NextRequest) {
       quickCloseMatch,
       servings: rawServings,
       userGoal,
-      sliders,
+      sliders: rawSliders,
+      addVeggies,
       importedRecipe,
       cachedClassification,
     } = body;
 
     const mode = requestMode ?? transformationMode ?? "wisedish";
+    const sliders = normalizeSlidersFromRequest(rawSliders);
 
     if (!dishInput || !mode) {
       return jsonResponse({ error: "dish and mode are required", code: "INVALID_REQUEST" }, requestId, { status: 400 });
@@ -865,6 +864,7 @@ export async function POST(req: NextRequest) {
       servings,
       userGoal,
       sliders,
+      addVeggies,
       importedRecipe,
       quickCloseMatch: Boolean(quickCloseMatch),
     });
@@ -922,27 +922,31 @@ export async function POST(req: NextRequest) {
       dilDish,
       servings,
       importedRecipe,
-      classificationRules
+      classificationRules,
+      dishInput
     );
 
     const generationPromise = (async (): Promise<GenerateResponse> => {
       const model = quickCloseMatch ? DEFAULT_QUICK_MODEL : DEFAULT_FULL_MODEL;
       const maxTokens = quickCloseMatch ? QUICK_CLOSE_MAX_TOKENS : MAX_COMPLETION_TOKENS;
-      const wisedishSchema = patchCompactWiseDishSchema(getWisedishSchema());
+      const wisedishSchema = patchWiseDishSchemaForDil(getWisedishSchema(), dilDish);
       const needsGuardRetry =
         !quickCloseMatch &&
-        (dilDish?.id === "biryani" ||
+        (Boolean(dilDish && isCataloguedDilDish(dilDish.id)) ||
           classification.dish_type === "dessert" ||
           classification.dietary_flags.length > 0 ||
           classification.dish_components.length > 1);
-      const maxAttempts = needsGuardRetry ? 2 : 1;
+      const maxAttempts =
+        needsGuardRetry || mode === "wisedish" ? Math.max(needsGuardRetry ? 2 : 1, 2) : 1;
 
       let userContent = buildUserMessage(dishInput, mode, servings, sliders, {
         quick: Boolean(quickCloseMatch),
         dilRecognised: Boolean(dilDish),
+        addVeggies: Boolean(addVeggies),
       });
 
       let lastResponse: GenerateResponse | null = null;
+      let closeMatchRetryNeeded = false;
 
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const openAiStartedAt = Date.now();
@@ -1002,8 +1006,14 @@ export async function POST(req: NextRequest) {
         const dishOut = typeof parsedObj.dish === "string" ? parsedObj.dish : dishInput;
         const taglineOut = typeof parsedObj.tagline === "string" ? parsedObj.tagline : "";
 
-        const { versions: versionsWithValidation, biryaniTextBlockers, classificationTextBlockers } =
+        const { versions: versionsWithValidation, dishTextBlockers, classificationTextBlockers } =
           annotateVersionsWithDil(mergedVersions, dilDish, userGoal, classification);
+
+        const closeMatchViolation = findCloseMatchProteinViolation(versionsWithValidation, mode);
+        if (closeMatchViolation) {
+          console.warn(`[generate] ${closeMatchViolation}`);
+          closeMatchRetryNeeded = true;
+        }
 
         lastResponse = {
           dish: dishOut,
@@ -1017,18 +1027,22 @@ export async function POST(req: NextRequest) {
         };
 
         const shouldRetryGuards =
-          (biryaniTextBlockers || classificationTextBlockers) && attempt < maxAttempts - 1;
+          (dishTextBlockers || classificationTextBlockers || closeMatchRetryNeeded) &&
+          attempt < maxAttempts - 1;
         if (shouldRetryGuards) {
           console.warn(
-            `[generate] text guard retry (attempt ${attempt + 1}/${maxAttempts}) biryani=${biryaniTextBlockers} classification=${classificationTextBlockers}`
+            `[generate] retry (attempt ${attempt + 1}/${maxAttempts}) dishText=${dishTextBlockers} classification=${classificationTextBlockers} closeMatch=${closeMatchRetryNeeded}`
           );
           const append = [
-            biryaniTextBlockers ? BIRYANI_GENERATION_RETRY_USER_APPEND : "",
+            dishTextBlockers && dilDish?.id === "biryani" ? BIRYANI_GENERATION_RETRY_USER_APPEND : "",
+            dishTextBlockers && dilDish && dilDish.id !== "biryani" ? dishTextRetryAppend(dilDish.id) ?? "" : "",
             classificationTextBlockers ? CLASSIFICATION_GENERATION_RETRY_USER_APPEND : "",
+            closeMatchRetryNeeded ? CLOSE_MATCH_RETRY_APPEND : "",
           ]
             .filter(Boolean)
             .join("\n\n");
           userContent = `${userContent}\n\n${append}`;
+          closeMatchRetryNeeded = false;
           continue;
         }
 
@@ -1039,7 +1053,12 @@ export async function POST(req: NextRequest) {
         throw new Error("Generation produced no response");
       }
 
-      if (shouldUseCache) setCachedResponse(cacheKey, lastResponse);
+      if (shouldUseCache && !responseHasBlockerViolations(lastResponse.versions)) {
+        const closeViolation = findCloseMatchProteinViolation(lastResponse.versions, mode);
+        if (!closeViolation) {
+          setCachedResponse(cacheKey, lastResponse);
+        }
+      }
       return lastResponse;
     })();
 

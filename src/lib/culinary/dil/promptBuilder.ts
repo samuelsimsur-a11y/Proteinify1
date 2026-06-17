@@ -121,7 +121,7 @@ Valid codes for this dish: ${allValidCodes.length > 0 ? allValidCodes.join(" | "
 BLOCKED (blocker): ${blockerCodes.length > 0 ? blockerCodes.join(", ") : "none"}
 FLAGGED (warning, user can override): ${warningCodes.length > 0 ? warningCodes.join(", ") : "none"}
 
-If no relevant swap codes apply, return: { "appliedSwaps": [] }
+If no relevant swap codes apply, return appliedSwapCodes: [] on each tier.
 `.trim();
 }
 

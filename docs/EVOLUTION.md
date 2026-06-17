@@ -35,7 +35,7 @@ We use **`N`** and **`N.M`** (like `3.2`, `4.1`). No third decimal unless you tr
 
 ## Current head
 
-**`6.3`** — full rebrand: package `wisedish`, `src/lib/wisedish`, `src/components/wisedish`, production host `wisedish.vercel.app`.
+**`6.5`** — audit fixes: slider wiring → prompt, user-intent block, Close Match +8g retry, TierLegend, VeggieToggle + servings UI, humanized errors, protein warnings on cards.
 
 Agents: when you finish a *notable* change, **bump the head**, **append a row** to the ledger (newest first), and mention the new ID in your summary.
 
@@ -45,6 +45,8 @@ Agents: when you finish a *notable* change, **bump the head**, **append a row** 
 
 | ID | Date | Source | Summary | Primary areas / files | Revert hints |
 |----|------|--------|---------|-------------------------|--------------|
+| **6.5** | 2026-05-28 | [agent] | **Product/prompt audit:** `promptLayers/userIntent.ts`, sliders wired to LLM, `addVeggies`, Close Match +8g retry, cache skip on blockers, TierLegend, servings/veggie UI, humanized errors, proteinMathWarning on cards | `route.ts`, `InputLab.tsx`, `ResultsPreview.tsx`, `VersionCard.tsx`, `userFacingErrors.ts` | Revert cache `v3.5-sliders-user-intent` |
+| **6.4** | 2026-05-27 | [agent] | **Production host:** Vercel `foodzap` → `wisedish`, domain `wisedish.vercel.app`, `productionOrigin.ts`, Capacitor/API fallbacks, stale localStorage origin purge | `productionOrigin.ts`, `capacitor.config.ts`, `apiBaseUrl.ts`, Vercel env, `docs/VERCEL.md` | Rename project back; remove domain alias |
 | **6.3** | 2026-05-21 | [agent] | Rebrand **Proteinify/FoodZap → Wise Dish**: dirs `wisedish/`, types `WiseDishResponse`, env `WISEDISH_*`, mode id `wisedish`, Vercel project `wisedish` | `package.json`, `src/lib/wisedish`, `src/components/wisedish`, `apiBaseUrl.ts`, `docs/VERCEL.md` | Restore `proteinify` paths from git |
 | **6.2** | 2026-05-19 | [agent] | **Dish classifier** (gpt-4o-mini) + heuristics, `buildClassificationRules` + ingredient compatibility, classification text guard, disambiguation UI, baseline badge, recipe-log cache, `generateApiResponse.schema.json` | `classifier.ts`, `systemPrompt.ts`, `classificationTextGuard.ts`, `route.ts`, `WiseDishApp.tsx`, `InputLab.tsx`, `ResultsPreview.tsx`, `recipeLog.ts`, `scripts/test-generation-cases.mjs` | Revert cache `v3.4-dish-classifier-heuristics` |
 | **6.1** | 2026-05-19 | [agent] | **Biryani:** whey isolate / protein powder **Full Send only** — Balanced uses yogurt-only marinade + optional bone-broth parboil; text guard `whey-biryani-wrong-tier`; cache `v3.2-biryani-whey-full-send-only` | `promptBuilder.ts`, `systemPrompt.ts`, `biryaniTextGuard.ts`, `route.ts`, `biryaniTextGuard.test.ts` | Revert cache key + guard tier check |

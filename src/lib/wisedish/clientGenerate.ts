@@ -174,7 +174,7 @@ export async function streamGenerateFull(
       return {
         ok: false,
         error:
-          "Request timed out — generation can take 1–2 minutes. Try again or use WISEDISH_USE_MOCK=true for instant mock data.",
+          "That took too long — complex dishes can need 1–2 minutes. Try again or simplify the dish name.",
       };
     }
     return {
@@ -271,7 +271,7 @@ export async function streamGenerateFull(
       return {
         ok: false,
         error:
-          "Request timed out — generation can take 1–2 minutes. Try again or use WISEDISH_USE_MOCK=true for instant mock data.",
+          "That took too long — complex dishes can need 1–2 minutes. Try again or simplify the dish name.",
       };
     }
     return { ok: false, error: `Failed to read generation stream from ${endpointUsed}.` };
@@ -326,7 +326,7 @@ export async function postGenerate(body: GenerateApiRequestBody): Promise<ParseR
       return {
         ok: false,
         error:
-          "Request timed out — generation can take 1–2 minutes. Try again or use WISEDISH_USE_MOCK=true for instant mock data.",
+          "That took too long — complex dishes can need 1–2 minutes. Try again or simplify the dish name.",
       };
     }
     return {

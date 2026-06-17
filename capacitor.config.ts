@@ -1,29 +1,29 @@
 import type { CapacitorConfig } from "@capacitor/cli";
+import { resolveProductionOrigin } from "./src/lib/wisedish/productionOrigin";
 
 /**
- * Production URL for the Wise Dish web app (HTTPS). The Android WebView loads this host;
- * keep it aligned with Vercel deployment and `NEXT_PUBLIC_SITE_URL` where possible.
+ * Release Android/iOS builds: bundle static `out/` locally — UI loads offline.
+ * API calls use `apiBaseUrl.ts` → production HTTPS when online.
+ *
+ * Dev live-reload: set CAPACITOR_SERVER_URL=http://localhost:3000 (or your LAN IP).
  */
-function productionWebUrl(): string {
-  const site =
-    process.env.CAPACITOR_SERVER_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-    "";
-  if (site) {
-    return site.endsWith("/") ? site.slice(0, -1) : site;
-  }
-  return "https://wisedish.vercel.app";
-}
+const liveReloadUrl =
+  process.env.CAPACITOR_SERVER_URL?.trim() ||
+  (process.env.CAPACITOR_USE_REMOTE === "true" ? resolveProductionOrigin() : "");
 
 const config: CapacitorConfig = {
   appId: "com.wisedish.app",
   appName: "Wise Dish",
   webDir: "out",
-  server: {
-    url: productionWebUrl(),
-    cleartext: false,
-    androidScheme: "https",
-  },
+  ...(liveReloadUrl
+    ? {
+        server: {
+          url: liveReloadUrl,
+          cleartext: liveReloadUrl.startsWith("http://"),
+          androidScheme: "https",
+        },
+      }
+    : {}),
 };
 
 export default config;

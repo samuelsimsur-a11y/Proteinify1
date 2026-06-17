@@ -13,7 +13,7 @@ export default function HeroSection() {
             Your dish. More protein. Same soul.
           </h1>
           <p className="mt-4 max-w-[52ch] text-sm leading-relaxed text-[color:var(--text-muted)]">
-            Tell us what you&apos;re cooking. Get three protein-optimised versions — each with a different trade-off.
+            Tell us what you&apos;re cooking. Get three versions — Close Match, Balanced, and Full Send — each with a different trade-off.
           </p>
 
           <div className="mt-5 flex flex-wrap gap-2">

@@ -14,6 +14,18 @@ This creates:
 
 Gradle reads `keystore.properties` automatically. **Never commit** the keystore or passwords.
 
+## Back up signing files (local + optional Drive)
+
+```bash
+npm run android:backup-signing
+```
+
+Creates a labeled folder (default):
+
+`~/Documents/WiseDish-Android-Play-Signing-Backup/`
+
+and a dated zip next to it. Drag that folder to [Google Drive](https://drive.google.com) if you use Drive in the browser; this Mac may not have Drive for desktop installed.
+
 ## Build a signed AAB
 
 ```bash

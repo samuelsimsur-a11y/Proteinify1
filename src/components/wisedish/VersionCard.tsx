@@ -147,6 +147,11 @@ function VersionCardLegacy({
                 {version.dilConsistencyWarning}
               </p>
             ) : null}
+            {version.proteinMathWarning ? (
+              <p className="mt-2 rounded-lg border border-slate-200/80 bg-slate-50/90 px-2.5 py-1.5 text-[11px] leading-snug text-slate-800">
+                Protein estimate may be off — {version.proteinMathWarning}
+              </p>
+            ) : null}
           </div>
           <div className="shrink-0 text-right">
             <button
@@ -484,6 +489,11 @@ function VersionCardV2({
             {version.dilConsistencyWarning ? (
               <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/90 px-2.5 py-1.5 text-[11px] leading-snug text-amber-950">
                 {version.dilConsistencyWarning}
+              </p>
+            ) : null}
+            {version.proteinMathWarning ? (
+              <p className="mt-2 rounded-lg border border-slate-200/80 bg-slate-50/90 px-2.5 py-1.5 text-[11px] leading-snug text-slate-800">
+                Protein estimate may be off — {version.proteinMathWarning}
               </p>
             ) : null}
           </div>

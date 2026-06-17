@@ -309,5 +309,30 @@
       "general": ["use the dish's native liquid if wet addition is needed"]
     },
     "allowOverride": true
+  },
+
+  {
+    "code": "edamame-pad-thai",
+    "constraints": {
+      "bannedDishes": ["pad-thai"]
+    },
+    "ingredientPhysics": null,
+    "violationIfBroken": "flavorarchviolation",
+    "severity": "blocker",
+    "reason": "Edamame sweetness dilutes tamarind–fish sauce pad thai profile",
+    "educationalContext": "Pad thai's sauce is aggressively tamarind-forward with fish sauce umami. Edamame's mild sweetness and Japanese association fight the Thai balance. Use extra shrimp, chicken, or pressed fried tofu instead.",
+    "safeAlternatives": [
+      "extra shrimp or chicken in the wok pass",
+      "pressed fried tofu for vegetarian pad thai"
+    ],
+    "alternativesByGoal": {
+      "protein-boost": ["extra shrimp (+30%)", "extra chicken thigh slices"],
+      "vegan": ["pressed fried tofu", "extra peanuts at finish (modest)"],
+      "lower-calorie": ["more bean sprouts for volume", "slightly smaller noodle portion"],
+      "lower-fat": ["reduce oil in wok pass", "more bean sprouts"],
+      "cultural-coherence": ["pressed fried tofu", "extra shrimp"],
+      "general": ["extra shrimp or pressed tofu"]
+    },
+    "allowOverride": false
   }
 ]

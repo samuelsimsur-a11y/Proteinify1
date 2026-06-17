@@ -8,6 +8,8 @@ import {
   buildBiryaniTransformationAddon,
   buildConstraintPromptFragment,
 } from "@/lib/culinary/dil/promptBuilder";
+import { buildDishTransformationAddon } from "@/lib/culinary/dil/dishTransformationAddons";
+import { buildDishOverrideFragment } from "@/lib/culinary/promptLayers/dishOverrides";
 
 export type Mode = "wisedish" | "lean" | "veggify";
 
@@ -77,13 +79,6 @@ Full Send (user opted into reinterpretation):
   • If you swap a structural carb (noodle/rice type) or core protein species, include in summary:
     "Higher-protein reinterpretation — flavour profile changes noticeably."
   • Still obey broth/no-broth-dairy rules and NEGATIVE_EXAMPLES — clever is useless if the bowl breaks.
-
-Whey isolate rule for Balanced and Full Send:
-- Whey may be used but must not be the only or first protein lever
-- Always pair whey with at least one whole-food protein change
-- If whey appears in Balanced, it must appear differently in Full Send
-  (different application, different amount, or a different technique entirely)
-- Never use whey in more than 2 of the 3 versions for the same dish
 
 Cross-version: At least one of the three tiers must lean on a creative whole-food protein lever from
 CREATIVE_SWAP_PALETTE (below) before defaulting to whey isolate anywhere in the trio.
@@ -605,7 +600,8 @@ export function buildSystemPrompt(
     ingredients?: string[];
     instructions?: string[];
   },
-  classificationRules: string = ""
+  classificationRules: string = "",
+  dishInput: string = ""
 ): string {
   const servingNote = servings > 1
     ? `
@@ -638,6 +634,9 @@ three graded tiers (Close Match, Balanced, Full Send). Tiers are change-lists on
     "",
     ...(classificationRules.trim()
       ? ["## Pre-classification rules", classificationRules.trim(), ""]
+      : []),
+    ...(dishInput.trim()
+      ? ["## Dish-specific overrides", buildDishOverrideFragment(dishInput.toLowerCase()), ""]
       : []),
     OPTIMIZATION_PRIORITY,
     "",
@@ -703,8 +702,12 @@ three graded tiers (Close Match, Balanced, Full Send). Tiers are change-lists on
     parts.push("", DIL_CATALOGUED_DISH_RULES);
     parts.push("", "## Culinary grammar constraints (Dish Identity Library)");
     parts.push(buildConstraintPromptFragment(dilDish));
-    if (dilDish.id === "biryani") {
-      parts.push("", buildBiryaniTransformationAddon());
+    const addon =
+      dilDish.id === "biryani"
+        ? buildBiryaniTransformationAddon()
+        : buildDishTransformationAddon(dilDish);
+    if (addon) {
+      parts.push("", addon);
     }
   } else {
     parts.push("", "## Dish not in DIL — apply general culinary judgment. appliedSwapCodes must be [].");

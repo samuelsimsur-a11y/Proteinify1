@@ -1,3 +1,8 @@
+/**
+ * @deprecated Legacy compact-code prompt stack — NOT used by POST /api/generate.
+ * Active path: `src/lib/culinary/systemPrompt.ts` + `src/lib/culinary/promptLayers/`.
+ * Dish overrides were ported to `promptLayers/dishOverrides.ts`. Do not extend this file.
+ */
 import type { GenerateApiRequestBody, VersionId } from "@/lib/wisedish/apiContract";
 import type { WiseDishResponse, RecipeVersion } from "@/lib/wisedish/types";
 

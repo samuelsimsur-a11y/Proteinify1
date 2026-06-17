@@ -23,6 +23,7 @@ import {
 } from "@/lib/recipeLog";
 import { getApiRequestEndpointCandidates, getResolvedApiBase } from "@/lib/apiBaseUrl";
 import HeroSection from "./HeroSection";
+import OfflineBanner from "./OfflineBanner";
 import InputLab from "./InputLab";
 import ResultsPreview from "./ResultsPreview";
 import HowItWorks from "./HowItWorks";
@@ -52,7 +53,7 @@ const DEFAULT_SLIDERS: SliderValues = {
   pantryRealism: 8,
 };
 
-const DEFAULT_DISH = "mac and cheese";
+const DEFAULT_DISH = "";
 const PERF_KEY = "wisedish_generate_perf_samples_v1";
 const LEGACY_PERF_KEY = "wisedish_generate_perf_samples_v1";
 const MAX_PERF_SAMPLES = 40;
@@ -704,6 +705,7 @@ export default function WiseDishApp() {
 
   return (
     <div className="flex flex-col">
+      <OfflineBanner />
       <HeroSection />
       <InputLab
         inputDish={inputDish}
@@ -712,6 +714,14 @@ export default function WiseDishApp() {
         onChangeSlider={onChangeSlider}
         mode={mode}
         onChangeMode={(next) => {
+          if (next === mode) return;
+          const hasResults = Boolean(response || streamingVersions?.some(Boolean));
+          if (
+            hasResults &&
+            !window.confirm("Switching mode clears your current results. Continue?")
+          ) {
+            return;
+          }
           resultsGenerationKey.current += 1;
           setMode(next);
           setSliders(recommendedSlidersByMode[next]);
@@ -729,6 +739,8 @@ export default function WiseDishApp() {
         }}
         addVeggies={addVeggies}
         onAddVeggiesChange={setAddVeggies}
+        servings={servings}
+        onChangeServings={setServings}
         thirdVersionLabel={thirdVersionLabel}
         showAdvanced={showAdvanced}
         onToggleAdvanced={() => setShowAdvanced((v) => !v)}

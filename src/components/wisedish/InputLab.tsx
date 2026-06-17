@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type { SliderValues } from "@/lib/wisedish/types";
 import SliderControl from "./SliderControl";
 import ExampleChips from "./ExampleChips";
+import VeggieToggle from "./VeggieToggle";
+
+const SERVING_OPTIONS = [1, 2, 4, 6, 8] as const;
 
 export type ModeId = "wisedish" | "lean";
 
@@ -16,6 +19,8 @@ type Props = {
   onChangeMode: (mode: ModeId) => void;
   addVeggies: boolean;
   onAddVeggiesChange: (next: boolean) => void;
+  servings: 1 | 2 | 4 | 6 | 8;
+  onChangeServings: (next: 1 | 2 | 4 | 6 | 8) => void;
   thirdVersionLabel: "Full Send" | "Fully Light";
   showAdvanced: boolean;
   onToggleAdvanced: () => void;
@@ -38,8 +43,10 @@ export default function InputLab({
   onChangeSlider,
   mode,
   onChangeMode,
-  addVeggies: _addVeggies,
-  onAddVeggiesChange: _onAddVeggiesChange,
+  addVeggies,
+  onAddVeggiesChange,
+  servings,
+  onChangeServings,
   thirdVersionLabel,
   showAdvanced,
   onToggleAdvanced,
@@ -174,30 +181,30 @@ export default function InputLab({
                   "disabled:cursor-not-allowed disabled:opacity-60",
                 ].join(" ")}
               />
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  title="Paste a TikTok link and we'll import the recipe"
+                  title="Paste a TikTok link from clipboard"
                   disabled={disabled}
                   onClick={(e) => {
                     e.preventDefault();
                     void tryPasteUrlFromClipboard("tiktok");
                   }}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[11px] font-bold text-[color:var(--text-muted)]"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 text-xs font-semibold text-[color:var(--text-muted)]"
                 >
-                  T
+                  <span aria-hidden>TikTok</span>
                 </button>
                 <button
                   type="button"
-                  title="Paste a YouTube link and we'll import the recipe"
+                  title="Paste a YouTube link from clipboard"
                   disabled={disabled}
                   onClick={(e) => {
                     e.preventDefault();
                     void tryPasteUrlFromClipboard("youtube");
                   }}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[11px] font-bold text-[color:var(--text-muted)]"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-full border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 text-xs font-semibold text-[color:var(--text-muted)]"
                 >
-                  ▶
+                  <span aria-hidden>YouTube</span>
                 </button>
               </div>
               {sourceHint ? (
@@ -224,7 +231,31 @@ export default function InputLab({
 
             {/* SLIDERS PANEL (ADVANCED) */}
             {showAdvanced ? (
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4">
+                <div>
+                  <div className="text-xs font-semibold text-[color:var(--text-muted)]">Recipe yield</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {SERVING_OPTIONS.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => onChangeServings(n)}
+                        className={[
+                          "h-10 min-w-[2.75rem] rounded-full border px-3 text-xs font-semibold transition-colors",
+                          servings === n
+                            ? "border-[color:var(--accent)] bg-[color:var(--accent)] text-white"
+                            : "border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[color:var(--text-primary)]",
+                        ].join(" ")}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    <span className="self-center text-[11px] text-[color:var(--text-muted)]">servings</span>
+                  </div>
+                </div>
+                <VeggieToggle value={addVeggies} onChange={onAddVeggiesChange} disabled={disabled} />
+                <div className="grid gap-4 sm:grid-cols-3">
                 <SliderControl
                   label="How close to the original?"
                   value={sliders.tasteIntegrity}
@@ -249,6 +280,7 @@ export default function InputLab({
                   disabled={disabled}
                   onChange={(v) => onChangeSlider("pantryRealism", v)}
                 />
+                </div>
               </div>
             ) : null}
 

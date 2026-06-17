@@ -16,7 +16,7 @@ export default function HowItWorks() {
             <li className="flex gap-2">
               <span className="font-display font-semibold text-[color:var(--text-primary)] shrink-0">3.</span>
               <span>
-                Get three versions — Close Match keeps it familiar, Full Send pushes hard.
+                Get three versions — Close Match keeps it familiar, Balanced splits the difference, Full Send pushes hard.
               </span>
             </li>
           </ol>

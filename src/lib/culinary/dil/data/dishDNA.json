@@ -3,30 +3,35 @@
     "id": "biryani",
     "displayName": "Biryani",
     "cuisineZone": "southasian",
-
     "cookingArcs": [
       {
         "track": "aromatics-and-protein",
-        "sequence": ["saute", "shallowfry", "braise"],
+        "sequence": [
+          "saute",
+          "shallowfry",
+          "braise"
+        ],
         "mergeAt": "layering",
         "notes": "saute = spice bloom in ghee; shallowfry = birista at 150-165C; braise = meat curry base"
       },
       {
         "track": "rice",
-        "sequence": ["parboil"],
+        "sequence": [
+          "parboil"
+        ],
         "mergeAt": "layering",
         "notes": "Rice parboiled to ~70% doneness in salted water before layering. Separate track — often runs concurrently with protein track."
       },
       {
         "track": "assembly",
-        "sequence": ["dumsteam"],
+        "sequence": [
+          "dumsteam"
+        ],
         "notes": "Sealed-vessel steam finish; dum seal (dough or foil) is load-bearing"
       }
     ],
-
     "identityMethod": "dumsteam",
     "identityProtein": "lamb or chicken",
-
     "fatVehicle": [
       {
         "name": "ghee",
@@ -47,7 +52,6 @@
         "role": "aromatic-finish"
       }
     ],
-
     "acidAnchor": [
       {
         "ingredient": "yogurt",
@@ -59,31 +63,34 @@
         "proteinEffect": "denatures"
       }
     ],
-
     "aromaticBase": [
       "birista (fried onions — Maillard at 150-165C)",
       "whole garam masala: cardamom, clove, cinnamon (bloomed in ghee first)",
       "saffron / kewra water (added at dum layer)"
     ],
-
-    "textureProfile": ["granular", "tender"],
-
+    "textureProfile": [
+      "granular",
+      "tender"
+    ],
     "textureContrast": {
-      "primary": { "component": "rice", "texture": "granular" },
-      "secondary": { "component": "protein", "texture": "tender" }
+      "primary": {
+        "component": "rice",
+        "texture": "granular"
+      },
+      "secondary": {
+        "component": "protein",
+        "texture": "tender"
+      }
     },
-
     "physicsConstraints": {
       "moistureSensitive": true,
       "heatTransferCritical": true,
       "acidTimingSensitive": true
     },
-
     "isTraditionallyVegan": false,
     "hasMarinade": true,
     "dairyPresent": true,
     "transformationClass": "same-soul",
-
     "keyNonnegotiables": [
       "layered rice and protein structure — layers must remain distinct",
       "aromatic whole spices bloomed in fat before any liquid",
@@ -91,12 +98,10 @@
       "dum-style sealed-steam finish",
       "identity protein remains in recognisable pieces"
     ],
-
     "structuralAnchors": [
       "long-grain rice (basmati preferred — low starch leach)",
       "dum seal (dough rope or foil — traps steam pressure)"
     ],
-
     "historicallyAbsent": [
       {
         "item": "soft-boiled jammy egg alongside",
@@ -118,26 +123,21 @@
         "note": "Mughlai variants may use cream, but it enters before dum, not as a finish."
       }
     ],
-
     "acceptedAdaptations": [
       "increase original meat portion modestly (up to +30%)",
       "add bone broth only as rice cooking liquid (not poured in post-layer)",
       "konjac rice blend up to 30% — must be thoroughly drained before layering",
       "paneer in paneer-forward variant — treat as separate dish logic, not swap"
     ],
-
     "confusionRisks": [
       "pulao (cooked in one pot — no dum, no layering)",
       "generic curry rice (sauce absorbed into rice — no identity separation)",
       "tandoori logic (dry-rub grill — imports wrong fat, acid, and method grammar)"
     ],
-
     "servingContext": "Layered rice dish served as a complete centrepiece — lifted from pot with both layers visible",
     "typicalServingSizeg": 400,
     "typicalProteinPerServingg": 26,
-
     "notes": "The dum (sealed steam pressure) is the defining physics. Any swap introducing excess free water collapses grain separation. Birista is not optional — it provides the Maillard-sweet backbone the whole dish is built on. The marinade acid timing is load-bearing: yogurt at 30% concentration for 2+ hours denatures actomyosin; rushing this or replacing it with post-cook acid produces a different texture.",
-
     "dishAliases": [
       "chicken biryani",
       "lamb biryani",
@@ -151,7 +151,509 @@
       "hyderabadi biryani",
       "lucknowi biryani"
     ],
-
     "schemaVersion": "2026-04-01"
+  },
+  {
+    "id": "jerk-chicken",
+    "displayName": "Jerk Chicken",
+    "cuisineZone": "caribbean",
+    "cookingArcs": [
+      {
+        "track": "protein",
+        "sequence": [
+          "dryrubgrill"
+        ],
+        "notes": "Scotch bonnet–allspice dry rub; low-and-slow smoke/grill until char and internal doneness — no liquid marinade arc"
+      },
+      {
+        "track": "assembly",
+        "sequence": [
+          "saute"
+        ],
+        "mergeAt": "plating",
+        "notes": "Optional quick sauté of sides (peppers/onion) at service — not part of protein cook"
+      }
+    ],
+    "identityMethod": "dryrubgrill",
+    "identityProtein": "chicken (bone-in thigh or leg preferred)",
+    "fatVehicle": [
+      {
+        "name": "neutral oil",
+        "thermalPoint": "high",
+        "stage": "grill",
+        "role": "frying-medium"
+      },
+      {
+        "name": "allspice-scotch bonnet rub oils",
+        "thermalPoint": "high",
+        "stage": "smoke",
+        "role": "flavor-carrier"
+      }
+    ],
+    "acidAnchor": [
+      {
+        "ingredient": "lime juice",
+        "stage": "at-table",
+        "role": "brightness",
+        "pHApprox": 2.4,
+        "proteinEffect": "brightens"
+      }
+    ],
+    "aromaticBase": [
+      "scotch bonnet + allspice + thyme + scallion + ginger (dry-rub paste, not yogurt marinade)",
+      "pimento wood smoke where available"
+    ],
+    "textureProfile": [
+      "fibrous",
+      "crisp"
+    ],
+    "textureContrast": {
+      "primary": {
+        "component": "chicken skin",
+        "texture": "crisp"
+      },
+      "secondary": {
+        "component": "meat",
+        "texture": "fibrous"
+      }
+    },
+    "physicsConstraints": {
+      "moistureSensitive": false,
+      "heatTransferCritical": true,
+      "acidTimingSensitive": true
+    },
+    "isTraditionallyVegan": false,
+    "hasMarinade": false,
+    "dairyPresent": false,
+    "transformationClass": "same-soul",
+    "keyNonnegotiables": [
+      "dry-rub + smoke/grill identity — not tandoori or yogurt-marinated bake",
+      "scotch bonnet heat + allspice backbone",
+      "charred exterior with juicy interior — not stewed or braised chicken",
+      "lime brightness at finish, not dairy enrichment"
+    ],
+    "structuralAnchors": [
+      "bone-in cuts that survive long grill without drying out",
+      "dry spice paste adhered to skin before heat"
+    ],
+    "historicallyAbsent": [
+      {
+        "item": "yogurt or curd marinade",
+        "confidence": "definitive",
+        "note": "Imports tandoori grammar — jerk is dry-rub culture"
+      },
+      {
+        "item": "paneer or Indian dairy enrichment",
+        "confidence": "definitive"
+      },
+      {
+        "item": "bone broth baste as primary moisture",
+        "confidence": "definitive"
+      }
+    ],
+    "acceptedAdaptations": [
+      "increase chicken portion 20–30% same cut",
+      "leaner skin-on breast with shorter grill time",
+      "extra scotch bonnet–allspice rub for intensity without changing method"
+    ],
+    "confusionRisks": [
+      "tandoori chicken (yogurt marinade + clay oven)",
+      "BBQ wet-mop sauced chicken (liquid baste logic)",
+      "brown-stew chicken (braised, not grilled)"
+    ],
+    "servingContext": "Smoked/grilled chicken with rice and peas or festival — protein is the charred centerpiece",
+    "typicalServingSizeg": 350,
+    "typicalProteinPerServingg": 32,
+    "notes": "Grill physics: free liquid on rub before heat causes flare-ups and soft skin instead of crackle. Protein boosts must respect dry-heat — no broth, no yogurt tenderisation arc.",
+    "dishAliases": [
+      "jerk chicken",
+      "jamaican jerk chicken",
+      "jerk",
+      "jerk chicken with rice",
+      "charcoal jerk chicken"
+    ],
+    "schemaVersion": "2026-05-28"
+  },
+  {
+    "id": "pho-bo",
+    "displayName": "Pho Bo",
+    "cuisineZone": "southeastasian",
+    "cookingArcs": [
+      {
+        "track": "broth",
+        "sequence": [
+          "simmerstew"
+        ],
+        "notes": "Charred onion/ginger + spice bundle + long beef bone simmer — clarity and depth are identity"
+      },
+      {
+        "track": "assembly",
+        "sequence": [
+          "brothnoodle"
+        ],
+        "mergeAt": "bowl",
+        "notes": "Raw thin-sliced beef + rice noodles + boiling broth pour — flash-cook at service"
+      }
+    ],
+    "identityMethod": "brothnoodle",
+    "identityProtein": "beef (brisket, flank, or eye round)",
+    "fatVehicle": [
+      {
+        "name": "beef fat from bones",
+        "thermalPoint": "neutral",
+        "stage": "simmer",
+        "role": "flavor-carrier"
+      },
+      {
+        "name": "hoisin/sriracha at table",
+        "thermalPoint": "neutral",
+        "stage": "at-table",
+        "role": "aromatic-finish"
+      }
+    ],
+    "acidAnchor": [
+      {
+        "ingredient": "lime",
+        "stage": "at-table",
+        "role": "brightness",
+        "pHApprox": 2.4,
+        "proteinEffect": "brightens"
+      }
+    ],
+    "aromaticBase": [
+      "star anise, cinnamon, clove, coriander seed (toasted spice profile)",
+      "charred onion and ginger",
+      "fish sauce in bowl assembly (not in long simmer as primary salt)"
+    ],
+    "textureProfile": [
+      "silky",
+      "tender"
+    ],
+    "textureContrast": {
+      "primary": {
+        "component": "broth",
+        "texture": "silky"
+      },
+      "secondary": {
+        "component": "beef",
+        "texture": "tender"
+      }
+    },
+    "physicsConstraints": {
+      "moistureSensitive": true,
+      "heatTransferCritical": false,
+      "acidTimingSensitive": true
+    },
+    "isTraditionallyVegan": false,
+    "hasMarinade": false,
+    "dairyPresent": false,
+    "transformationClass": "same-soul",
+    "keyNonnegotiables": [
+      "clear-to-slightly-cloudy aromatic beef broth — not generic stock",
+      "rice noodles separate from long simmer; flash assembly",
+      "raw or rare beef slices finished by hot broth pour",
+      "herb plate (Thai basil, cilantro, bean sprouts) at table"
+    ],
+    "structuralAnchors": [
+      "rice noodles (banh pho width)",
+      "beef bone broth with toasted spice char"
+    ],
+    "historicallyAbsent": [
+      {
+        "item": "yogurt or dairy broth enrichment",
+        "confidence": "definitive"
+      },
+      {
+        "item": "cottage cheese or cream in broth",
+        "confidence": "definitive"
+      },
+      {
+        "item": "whey or protein powder in hot broth",
+        "confidence": "definitive"
+      }
+    ],
+    "acceptedAdaptations": [
+      "extra lean beef slices (+25–35%)",
+      "additional tendon or brisket for collagen without clouding broth excessively",
+      "bone broth concentration for protein depth in simmer track only"
+    ],
+    "confusionRisks": [
+      "generic beef noodle soup (no spice char)",
+      "ramen (fat-rich emulsified tare — different broth physics)",
+      "stew with thick gravy"
+    ],
+    "servingContext": "Large bowl — broth is the primary volume; protein is thin-sliced and flash-set",
+    "typicalServingSizeg": 500,
+    "typicalProteinPerServingg": 28,
+    "notes": "Broth-native protein moves only. Adding dairy or powder to hot broth breaks clarity and cultural grammar.",
+    "dishAliases": [
+      "pho bo",
+      "pho",
+      "vietnamese pho",
+      "beef pho",
+      "pho beef",
+      "phở bò"
+    ],
+    "schemaVersion": "2026-05-28"
+  },
+  {
+    "id": "pad-thai",
+    "displayName": "Pad Thai",
+    "cuisineZone": "southeastasian",
+    "cookingArcs": [
+      {
+        "track": "noodle",
+        "sequence": [
+          "stirfry"
+        ],
+        "notes": "High-heat wok; rice noodles soaked then stir-fried — not boiled in broth"
+      },
+      {
+        "track": "protein",
+        "sequence": [
+          "stirfry"
+        ],
+        "mergeAt": "wok",
+        "notes": "Shrimp, chicken, or pressed tofu in same wok pass — quick cook"
+      }
+    ],
+    "identityMethod": "stirfry",
+    "identityProtein": "shrimp or chicken or pressed tofu",
+    "fatVehicle": [
+      {
+        "name": "neutral wok oil",
+        "thermalPoint": "high",
+        "stage": "stirfry",
+        "role": "frying-medium"
+      },
+      {
+        "name": "crushed peanuts",
+        "thermalPoint": "neutral",
+        "stage": "finish",
+        "role": "aromatic-finish"
+      }
+    ],
+    "acidAnchor": [
+      {
+        "ingredient": "tamarind paste",
+        "stage": "during-cook",
+        "role": "balance",
+        "pHApprox": 3.5,
+        "concentrationPct": 8,
+        "proteinEffect": "none"
+      },
+      {
+        "ingredient": "lime",
+        "stage": "at-table",
+        "role": "brightness",
+        "pHApprox": 2.4,
+        "proteinEffect": "brightens"
+      }
+    ],
+    "aromaticBase": [
+      "tamarind + fish sauce + palm sugar balance (not soy-dominant)",
+      "garlic chive, bean sprout crunch at finish"
+    ],
+    "textureProfile": [
+      "silky",
+      "crisp"
+    ],
+    "textureContrast": {
+      "primary": {
+        "component": "noodle",
+        "texture": "silky"
+      },
+      "secondary": {
+        "component": "bean sprout",
+        "texture": "crisp"
+      }
+    },
+    "physicsConstraints": {
+      "moistureSensitive": true,
+      "heatTransferCritical": true,
+      "acidTimingSensitive": false
+    },
+    "isTraditionallyVegan": false,
+    "hasMarinade": false,
+    "dairyPresent": false,
+    "transformationClass": "same-soul",
+    "keyNonnegotiables": [
+      "wok stir-fry — not soup, not baked casserole",
+      "tamarind–fish sauce–palm sugar sauce reduced on noodles",
+      "rice noodle with chew, not mush",
+      "peanut + lime finish"
+    ],
+    "structuralAnchors": [
+      "flat rice noodles (sen lek / pad thai width)",
+      "tamarind-based sauce reduced in wok"
+    ],
+    "historicallyAbsent": [
+      {
+        "item": "edamame as primary protein add",
+        "confidence": "definitive",
+        "note": "Japanese legume sweetness fights tamarind/fish sauce profile"
+      },
+      {
+        "item": "bone broth or stock flood",
+        "confidence": "definitive"
+      },
+      {
+        "item": "yogurt or dairy sauce",
+        "confidence": "definitive"
+      },
+      {
+        "item": "paneer",
+        "confidence": "definitive"
+      }
+    ],
+    "acceptedAdaptations": [
+      "extra shrimp or chicken (+25–30%)",
+      "pressed fried tofu for vegetarian identity",
+      "higher-protein rice noodle blend if texture stays chewy"
+    ],
+    "confusionRisks": [
+      "chow mein (soy-dominant, different noodle logic)",
+      "pad see ew (dark soy, wide noodle)",
+      "generic stir-fry with oyster sauce only"
+    ],
+    "servingContext": "Single-plate wok noodles — saucy but not brothy",
+    "typicalServingSizeg": 380,
+    "typicalProteinPerServingg": 22,
+    "notes": "Liquid volume is tightly controlled — broth additions create soup. Protein boosts = more shrimp/tofu/chicken in the wok pass.",
+    "dishAliases": [
+      "pad thai",
+      "pad thai noodles",
+      "pad-thai",
+      "padthai",
+      "thai stir fry noodles",
+      "pad thai with chicken",
+      "pad thai with shrimp"
+    ],
+    "schemaVersion": "2026-05-28"
+  },
+  {
+    "id": "falafel",
+    "displayName": "Falafel",
+    "cuisineZone": "middleeastern",
+    "cookingArcs": [
+      {
+        "track": "falafel",
+        "sequence": [
+          "deepfry"
+        ],
+        "notes": "Dried chickpea/fava mixture — no binders that add free water; fry until shatter-crisp shell"
+      },
+      {
+        "track": "assembly",
+        "sequence": [
+          "saute"
+        ],
+        "mergeAt": "plating",
+        "notes": "Optional tahini sauce and salad — not cooked with falafel ball"
+      }
+    ],
+    "identityMethod": "deepfry",
+    "identityProtein": "chickpea and/or fava (legume)",
+    "fatVehicle": [
+      {
+        "name": "neutral fry oil",
+        "thermalPoint": "high",
+        "stage": "deepfry",
+        "role": "frying-medium"
+      },
+      {
+        "name": "tahini",
+        "thermalPoint": "neutral",
+        "stage": "at-table",
+        "role": "aromatic-finish"
+      }
+    ],
+    "acidAnchor": [
+      {
+        "ingredient": "lemon juice",
+        "stage": "at-table",
+        "role": "brightness",
+        "pHApprox": 2.3,
+        "proteinEffect": "brightens"
+      }
+    ],
+    "aromaticBase": [
+      "parsley, cilantro, cumin, coriander, garlic (herb-heavy mixture)",
+      "sesame seed optional in mix"
+    ],
+    "textureProfile": [
+      "crisp",
+      "granular"
+    ],
+    "textureContrast": {
+      "primary": {
+        "component": "exterior",
+        "texture": "crisp"
+      },
+      "secondary": {
+        "component": "interior",
+        "texture": "granular"
+      }
+    },
+    "physicsConstraints": {
+      "moistureSensitive": true,
+      "heatTransferCritical": true,
+      "acidTimingSensitive": false
+    },
+    "isTraditionallyVegan": true,
+    "hasMarinade": false,
+    "dairyPresent": false,
+    "transformationClass": "same-soul",
+    "keyNonnegotiables": [
+      "deep-fried legume fritters — crisp shell, green herb interior",
+      "traditionally vegan — egg binders break identity for many users",
+      "not baked casserole or pan-fried patty without fry shell",
+      "tahini/lemon at service, not dairy cheese melt"
+    ],
+    "structuralAnchors": [
+      "dried (not canned-only) chickpea/fava base for structure",
+      "350–375°F fry for shatter crust"
+    ],
+    "historicallyAbsent": [
+      {
+        "item": "egg in mixture",
+        "confidence": "definitive",
+        "note": "Breaks vegan identity; changes bind physics"
+      },
+      {
+        "item": "cottage cheese in batter",
+        "confidence": "definitive"
+      },
+      {
+        "item": "whey or protein powder mixed into falafel paste",
+        "confidence": "definitive"
+      },
+      {
+        "item": "soya chunks as core replacement",
+        "confidence": "definitive"
+      }
+    ],
+    "acceptedAdaptations": [
+      "slightly larger portion of same mixture (+15–20%)",
+      "extra herb/garlic density for flavor without wet binders",
+      "serve with higher-protein tahini-yogurt sauce on side only if not claiming vegan"
+    ],
+    "confusionRisks": [
+      "baked falafel patties (different texture contract)",
+      "hush puppies (corn batter)",
+      "vegetable fritters with egg binders"
+    ],
+    "servingContext": "Fritters in pita or platter with tahini — protein is the fried ball itself",
+    "typicalServingSizeg": 280,
+    "typicalProteinPerServingg": 18,
+    "notes": "Free water in mix causes blowouts in fryer. Protein powder in paste destroys crisp shell grammar.",
+    "dishAliases": [
+      "falafel",
+      "falafel balls",
+      "falafel wrap",
+      "falafel pita",
+      "middle eastern falafel"
+    ],
+    "schemaVersion": "2026-05-28"
   }
 ]

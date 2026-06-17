@@ -8,6 +8,8 @@ import type {
 } from "@/lib/wisedish/types";
 import { useEffect, useState } from "react";
 import VersionCard from "./VersionCard";
+import TierLegend from "./TierLegend";
+import { humanizeGenerateError } from "@/lib/wisedish/userFacingErrors";
 type VersionId = RecipeVersion["id"];
 
 type StreamingSlots = [RecipeVersion | null, RecipeVersion | null, RecipeVersion | null];
@@ -119,7 +121,7 @@ export default function ResultsPreview({
                 Your transformed versions
               </div>
               <div className="mt-1 text-xs text-[color:var(--text-muted)]">
-                Three versions.
+                Close Match · Balanced · {transformationMode === "lean" ? "Fully Light" : "Full Send"}
               </div>
             </div>
             <div className="shrink-0 rounded-[var(--radius-pill)] border border-[color:var(--divider)] bg-[color:var(--surface-offset)] px-2.5 py-1.5">
@@ -150,6 +152,7 @@ export default function ResultsPreview({
             </div>
           </div>
         </div>
+        {(response || inStreamMode) && !error ? <TierLegend mode={transformationMode} /> : null}
         <div className="mt-2 px-1 text-center text-[11px] leading-snug text-[color:var(--text-muted)]">
           Ingredients scale with serving size. Protein stays per serving.
         </div>
@@ -179,7 +182,9 @@ export default function ResultsPreview({
         {error ? (
           <div className="mt-4 pf-card p-4">
             <div className="font-display text-sm font-semibold text-[color:var(--text-primary)]">Something went wrong</div>
-            <div className="mt-1 text-xs leading-relaxed text-[color:var(--text-muted)]">{error}</div>
+            <div className="mt-1 text-xs leading-relaxed text-[color:var(--text-muted)]">
+              {humanizeGenerateError(error) ?? error}
+            </div>
             <button
               type="button"
               onClick={onRetry}

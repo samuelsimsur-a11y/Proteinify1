@@ -1,7 +1,14 @@
+import {
+  WISEDISH_LEGACY_ORIGINS,
+  WISEDISH_PRODUCTION_ORIGIN,
+  normalizeOrigin,
+  productionOriginCandidates,
+} from "@/lib/wisedish/productionOrigin";
+
 const rawBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
 const rawFallbacks = process.env.NEXT_PUBLIC_API_FALLBACK_URLS?.trim() ?? "";
 /** Primary production Wise Dish deployment (SPA + `/api/*`). */
-const PRODUCTION_API_BASE = "https://wisedish.vercel.app";
+const PRODUCTION_API_BASE = WISEDISH_PRODUCTION_ORIGIN;
 const CAPACITOR_PRIMARY_API_BASE_URL = PRODUCTION_API_BASE;
 const LAST_GOOD_API_ORIGIN_KEY = "wisedish_last_good_api_origin";
 /** Pre-rebrand Capacitor / WebView localStorage — read-only migration */
@@ -11,8 +18,7 @@ const LEGACY_LAST_GOOD_API_ORIGIN_KEY = "foodzap_last_good_api_origin";
 export const PRODUCTION_WISEDISH_BASE = PRODUCTION_API_BASE;
 
 function normalizeBase(base: string): string {
-  if (!base) return "";
-  return base.endsWith("/") ? base.slice(0, -1) : base;
+  return normalizeOrigin(base);
 }
 
 const API_BASE_URL = normalizeBase(rawBase);
@@ -48,7 +54,8 @@ export function getApiBaseCandidates(): string[] {
   if (API_BASE_URL) unique.add(API_BASE_URL);
   for (const fallback of API_FALLBACKS) unique.add(fallback);
   if (shouldUseCapacitorFallback()) {
-    unique.add(CAPACITOR_PRIMARY_API_BASE_URL);
+    for (const origin of productionOriginCandidates()) unique.add(origin);
+    for (const legacy of WISEDISH_LEGACY_ORIGINS) unique.add(legacy);
   }
   return Array.from(unique);
 }
@@ -58,6 +65,15 @@ export function joinApiBase(base: string, path: string): string {
   return `${base}${path}`;
 }
 
+function isKnownApiOrigin(origin: string): boolean {
+  const n = normalizeBase(origin);
+  if (!n) return false;
+  const known = new Set(productionOriginCandidates());
+  if (API_BASE_URL) known.add(API_BASE_URL);
+  for (const fallback of API_FALLBACKS) known.add(fallback);
+  return known.has(n);
+}
+
 function getLastGoodApiOrigin(): string | null {
   if (typeof window === "undefined") return null;
   try {
@@ -65,7 +81,13 @@ function getLastGoodApiOrigin(): string | null {
       window.localStorage.getItem(LAST_GOOD_API_ORIGIN_KEY) ??
       window.localStorage.getItem(LEGACY_LAST_GOOD_API_ORIGIN_KEY);
     if (!raw) return null;
-    return normalizeBase(raw);
+    const origin = normalizeBase(raw);
+    if (!isKnownApiOrigin(origin)) {
+      window.localStorage.removeItem(LAST_GOOD_API_ORIGIN_KEY);
+      window.localStorage.removeItem(LEGACY_LAST_GOOD_API_ORIGIN_KEY);
+      return null;
+    }
+    return origin;
   } catch {
     return null;
   }
@@ -125,8 +147,9 @@ export function getApiRequestEndpointCandidates(apiPath: "/api/generate" | "/api
       const url = joinApiBase(base, apiPath);
       if (!out.includes(url)) out.push(url);
     };
-    push(CAPACITOR_PRIMARY_API_BASE_URL);
+    for (const origin of productionOriginCandidates()) push(origin);
     for (const fallback of API_FALLBACKS) push(fallback);
+    for (const legacy of WISEDISH_LEGACY_ORIGINS) push(legacy);
     return orderByLastGoodOrigin(out);
   }
 
