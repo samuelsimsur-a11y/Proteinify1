@@ -1,10 +1,20 @@
 apply plugin: 'com.android.application'
+apply plugin: 'com.github.triplet.play'
 
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
+
+// Single source of truth: repo-root version.json
+def versionJsonFile = rootProject.file("../version.json")
+if (!versionJsonFile.exists()) {
+    throw new GradleException("Missing version.json at ${versionJsonFile}. Seed via: node scripts/play-client.js --seed-from-report")
+}
+def versionJson = new groovy.json.JsonSlurper().parseText(versionJsonFile.getText("UTF-8"))
+def resolvedVersionCode = versionJson.versionCode as Integer
+def resolvedVersionName = versionJson.versionName as String
 
 android {
     namespace = "com.wisedish.app"
@@ -13,8 +23,8 @@ android {
         applicationId "com.wisedish.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.0.1"
+        versionCode resolvedVersionCode
+        versionName resolvedVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -40,6 +50,17 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+}
+
+play {
+    // Path from env — never commit the JSON key.
+    def saPath = System.getenv("PLAY_SERVICE_ACCOUNT_JSON")
+    if (saPath != null && !saPath.trim().isEmpty()) {
+        serviceAccountCredentials.set(file(saPath.trim()))
+    }
+    // Default track; override with ./gradlew publishBundle --track=<literal>
+    track.set("internal")
+    defaultToAppBundles.set(true)
 }
 
 repositories {

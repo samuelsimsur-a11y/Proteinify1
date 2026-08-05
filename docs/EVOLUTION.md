@@ -35,7 +35,7 @@ We use **`N`** and **`N.M`** (like `3.2`, `4.1`). No third decimal unless you tr
 
 ## Current head
 
-**`6.5`** — audit fixes: slider wiring → prompt, user-intent block, Close Match +8g retry, TierLegend, VeggieToggle + servings UI, humanized errors, protein warnings on cards.
+**`6.6`** — release pipeline on `chore/release-pipeline`: `version.json`, GPP 4.0.0, play-client/preflight/verify, `release.sh` dry-run default, stamped `/version.json` for web + AAB.
 
 Agents: when you finish a *notable* change, **bump the head**, **append a row** to the ledger (newest first), and mention the new ID in your summary.
 
@@ -45,6 +45,7 @@ Agents: when you finish a *notable* change, **bump the head**, **append a row** 
 
 | ID | Date | Source | Summary | Primary areas / files | Revert hints |
 |----|------|--------|---------|-------------------------|--------------|
+| **6.6** | 2026-08-04 | [agent] | **Release pipeline:** `version.json` SoT, GPP **4.0.0**, `play-client`/`preflight`/`verify`/`release.sh`, preview-only Vercel + `promote-web`, AAB embeds stamped `version.json` | `release.sh`, `scripts/*`, `android/app/build.gradle`, `docs/RELEASING.md` | Delete pipeline files; restore hardcoded versionCode |
 | **6.5** | 2026-05-28 | [agent] | **Product/prompt audit:** `promptLayers/userIntent.ts`, sliders wired to LLM, `addVeggies`, Close Match +8g retry, cache skip on blockers, TierLegend, servings/veggie UI, humanized errors, proteinMathWarning on cards | `route.ts`, `InputLab.tsx`, `ResultsPreview.tsx`, `VersionCard.tsx`, `userFacingErrors.ts` | Revert cache `v3.5-sliders-user-intent` |
 | **6.4** | 2026-05-27 | [agent] | **Production host:** Vercel `foodzap` → `wisedish`, domain `wisedish.vercel.app`, `productionOrigin.ts`, Capacitor/API fallbacks, stale localStorage origin purge | `productionOrigin.ts`, `capacitor.config.ts`, `apiBaseUrl.ts`, Vercel env, `docs/VERCEL.md` | Rename project back; remove domain alias |
 | **6.3** | 2026-05-21 | [agent] | Rebrand **Proteinify/FoodZap → Wise Dish**: dirs `wisedish/`, types `WiseDishResponse`, env `WISEDISH_*`, mode id `wisedish`, Vercel project `wisedish` | `package.json`, `src/lib/wisedish`, `src/components/wisedish`, `apiBaseUrl.ts`, `docs/VERCEL.md` | Restore `proteinify` paths from git |

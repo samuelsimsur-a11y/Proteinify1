@@ -1,0 +1,6 @@
+{
+  "versionName": "1.0.1",
+  "versionCode": 2,
+  "seededFrom": "repo-bootstrap",
+  "seedNote": "TEMPORARY — Phase 3 must overwrite via: node scripts/play-client.js --seed-from-report. Do not bump until live Play tracks are read."
+}
