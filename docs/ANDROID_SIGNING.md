@@ -82,3 +82,7 @@ CI sets `versionCode = ANDROID_VERSION_CODE_OFFSET + run number`. If Play reject
 ### "Only releases with status draft may be created on draft app"
 
 Until the app has passed its first Play review, run the workflow with **status = draft**, then roll the release out in Play Console.
+
+## Claude Desktop (MCP)
+
+`tools/play-mcp/` is a local MCP server that lets Claude Desktop list releases, upload AABs to testing tracks, promote releases and answer reviews, using the same service account. Setup: `tools/play-mcp/README.md`.

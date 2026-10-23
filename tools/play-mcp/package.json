@@ -1,0 +1,23 @@
+{
+  "name": "wisedish-play-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local MCP server that lets Claude Desktop manage Wise Dish releases via the Google Play Developer API.",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "wisedish-play-mcp": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "check": "node index.js --check"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@googleapis/androidpublisher": "^42.2.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  }
+}

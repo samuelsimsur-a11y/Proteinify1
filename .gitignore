@@ -23,3 +23,6 @@ yarn-error.log*
 android/keystore.properties
 android/*.keystore
 android/SIGNING_CREDENTIALS.txt
+
+# Google service account keys (keep in ~/.secrets, never in the repo)
+*service-account*.json
