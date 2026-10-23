@@ -124,6 +124,39 @@ function releaseNotes(text) {
   return text ? [{ language: "en-US", text: text.slice(0, 500) }] : undefined;
 }
 
+async function uploadBundle({ aab_path, track, status, release_notes }) {
+  const file = path.resolve(REPO_ROOT, expandHome(aab_path || DEFAULT_AAB));
+  if (!file.endsWith(".aab")) throw new Error(`Expected an .aab file, got ${file}`);
+  if (!fs.existsSync(file)) {
+    throw new Error(`AAB not found at ${file}. Build it first: npm run build:android && cd android && ./gradlew bundleRelease -PversionCode=<n>`);
+  }
+  const sizeMb = (fs.statSync(file).size / 1024 / 1024).toFixed(1);
+  log(`uploading ${file} (${sizeMb} MB) to ${track} as ${status}`);
+
+  const result = await withEdit(
+    async (api, editId) => {
+      const { data: bundle } = await api.edits.bundles.upload({
+        packageName: PACKAGE_NAME,
+        editId,
+        media: { mimeType: "application/octet-stream", body: fs.createReadStream(file) },
+      });
+      const versionCode = String(bundle.versionCode);
+      await api.edits.tracks.update({
+        packageName: PACKAGE_NAME,
+        editId,
+        track,
+        requestBody: {
+          track,
+          releases: [{ versionCodes: [versionCode], status, releaseNotes: releaseNotes(release_notes) }],
+        },
+      });
+      return { versionCode, sha256: bundle.sha256 };
+    },
+    { commit: true }
+  );
+  return { uploaded: path.basename(file), sizeMb: Number(sizeMb), track, status, ...result };
+}
+
 const server = new McpServer({ name: "wisedish-google-play", version: "0.1.0" });
 
 server.registerTool(
@@ -161,38 +194,9 @@ server.registerTool(
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   },
-  async ({ aab_path, track, status, release_notes }) => {
+  async (args) => {
     try {
-      const file = path.resolve(REPO_ROOT, expandHome(aab_path || DEFAULT_AAB));
-      if (!file.endsWith(".aab")) throw new Error(`Expected an .aab file, got ${file}`);
-      if (!fs.existsSync(file)) {
-        throw new Error(`AAB not found at ${file}. Build it first: npm run build:android && cd android && ./gradlew bundleRelease -PversionCode=<n>`);
-      }
-      const sizeMb = (fs.statSync(file).size / 1024 / 1024).toFixed(1);
-      log(`uploading ${file} (${sizeMb} MB) to ${track} as ${status}`);
-
-      const result = await withEdit(
-        async (api, editId) => {
-          const { data: bundle } = await api.edits.bundles.upload({
-            packageName: PACKAGE_NAME,
-            editId,
-            media: { mimeType: "application/octet-stream", body: fs.createReadStream(file) },
-          });
-          const versionCode = String(bundle.versionCode);
-          await api.edits.tracks.update({
-            packageName: PACKAGE_NAME,
-            editId,
-            track,
-            requestBody: {
-              track,
-              releases: [{ versionCodes: [versionCode], status, releaseNotes: releaseNotes(release_notes) }],
-            },
-          });
-          return { versionCode, sha256: bundle.sha256 };
-        },
-        { commit: true }
-      );
-      return ok({ uploaded: path.basename(file), sizeMb: Number(sizeMb), track, status, ...result });
+      return ok(await uploadBundle(args));
     } catch (err) {
       return fail(err);
     }
@@ -310,7 +314,22 @@ server.registerTool(
 );
 
 // `node index.js --check` verifies the key and permissions from a terminal without Claude.
-if (process.argv.includes("--check")) {
+// `node index.js --upload <internal|alpha|beta> ["release notes"]` uploads from a terminal,
+// for big AABs or slow connections where a Claude Desktop tool call may time out.
+const uploadAt = process.argv.indexOf("--upload");
+if (uploadAt !== -1) {
+  const track = process.argv[uploadAt + 1] || "internal";
+  const notes = process.argv[uploadAt + 2];
+  try {
+    if (!UPLOAD_TRACKS.includes(track)) throw new Error(`Track must be one of: ${UPLOAD_TRACKS.join(", ")}`);
+    console.log(`Uploading to ${track}… (this can take a few minutes)`);
+    console.log(JSON.stringify(await uploadBundle({ track, status: process.env.PLAY_STATUS || "completed", release_notes: notes }), null, 2));
+    process.exit(0);
+  } catch (err) {
+    console.error(explain(err));
+    process.exit(1);
+  }
+} else if (process.argv.includes("--check")) {
   try {
     const tracks = await listTracks();
     console.log(`Connected to Google Play for ${PACKAGE_NAME}.`);

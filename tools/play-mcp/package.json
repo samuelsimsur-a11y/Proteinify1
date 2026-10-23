@@ -10,7 +10,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "check": "node index.js --check"
+    "check": "node index.js --check",
+    "upload": "node index.js --upload"
   },
   "engines": {
     "node": ">=20"

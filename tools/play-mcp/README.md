@@ -84,6 +84,17 @@ The AAB still has to be built first:
 npm run build:android && cd android && ./gradlew bundleRelease -PversionCode=<next> -PversionName=<x.y.z>
 ```
 
+## Uploading from the terminal
+
+Large AABs or slow connections can make a Claude Desktop tool call time out mid-upload. The same upload works from a terminal, with no time limit:
+
+```bash
+cd /Users/samuelsuresh/proteinify/tools/play-mcp
+PLAY_KEY_FILE=~/.secrets/play-service-account.json npm run upload -- alpha "Bug fixes and improvements."
+```
+
+If a Claude upload timed out, run `npm run check` first. If the version code already shows on the track, the upload went through.
+
 ## Safety
 
 - The key file is a password for your Play account. Keep it in `~/.secrets/`, never in the project folder, and never paste it into a chat.
