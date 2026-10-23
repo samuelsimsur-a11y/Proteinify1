@@ -64,7 +64,7 @@ Google may re-sign with an app signing key after upload. You still must upload a
 
 1. **First upload by hand.** Play only accepts API uploads for an app that already exists with at least one AAB. Upload `app-release.aab` once in Play Console.
 2. **Service account.** In Google Cloud Console, create a service account and a JSON key, and enable the *Google Play Android Developer API*. Then, in Play Console → Users and permissions, invite the service account email and grant it release permissions for Wise Dish.
-3. **Repository secrets** (GitHub → Settings → Secrets and variables → Actions → Secrets):
+3. **Repository secrets.** Fastest: on the Mac that has the keystore, run `npm run android:ci-secrets -- ~/Downloads/<service-account>.json` (needs `gh auth login`). Or add them by hand (GitHub → Settings → Secrets and variables → Actions → Secrets):
 
    | Secret | Value |
    | --- | --- |
