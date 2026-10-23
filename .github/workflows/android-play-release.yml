@@ -1,0 +1,127 @@
+name: Android → Google Play
+
+# Builds a signed release AAB and uploads it to Google Play.
+# Setup (secrets, first manual upload): docs/ANDROID_SIGNING.md → "Automatic uploads (GitHub Actions)".
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: Play track
+        type: choice
+        options: [internal, alpha, beta, production]
+        default: internal
+      status:
+        description: Release status (use "draft" until the app has passed its first Play review)
+        type: choice
+        options: [completed, draft]
+        default: completed
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: android-play-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PACKAGE_NAME: com.wisedish.app
+      TRACK: ${{ inputs.track || 'internal' }}
+      RELEASE_STATUS: ${{ inputs.status || 'completed' }}
+      # Public build-time values baked into the static bundle (Settings → Variables → Actions).
+      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+      NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+      NEXT_PUBLIC_API_FALLBACK_URLS: ${{ vars.NEXT_PUBLIC_API_FALLBACK_URLS }}
+      NEXT_PUBLIC_PRIVACY_CONTACT_EMAIL: ${{ vars.NEXT_PUBLIC_PRIVACY_CONTACT_EMAIL }}
+      NEXT_PUBLIC_CLARITY_PROJECT_ID: ${{ vars.NEXT_PUBLIC_CLARITY_PROJECT_ID }}
+      NEXT_PUBLIC_CLARITY_DISABLED: ${{ vars.NEXT_PUBLIC_CLARITY_DISABLED }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          missing=0
+          for name in KS KS_PASS KEY_PASS PLAY_JSON; do
+            if [ -z "${!name}" ]; then echo "::error::Missing secret for $name (see docs/ANDROID_SIGNING.md)"; missing=1; fi
+          done
+          exit $missing
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web bundle and sync Capacitor
+        run: npm run build:android
+
+      - name: Restore upload keystore
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ vars.ANDROID_KEY_ALIAS || 'wisedish' }}
+        run: |
+          echo "$KS" | base64 --decode > android/wisedish-release.keystore
+          cat > android/keystore.properties <<EOF
+          storeFile=wisedish-release.keystore
+          storePassword=$KS_PASS
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASS
+          EOF
+
+      - name: Compute version
+        id: version
+        env:
+          OFFSET: ${{ vars.ANDROID_VERSION_CODE_OFFSET || '100' }}
+        run: |
+          code=$(( OFFSET + GITHUB_RUN_NUMBER ))
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then name="${GITHUB_REF_NAME#v}"; else name="1.0.$code"; fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "versionCode=$code versionName=$name track=$TRACK status=$RELEASE_STATUS"
+
+      - name: Build signed AAB
+        working-directory: android
+        run: ./gradlew bundleRelease -PversionCode=${{ steps.version.outputs.code }} -PversionName=${{ steps.version.outputs.name }}
+
+      - name: Verify signature
+        run: jarsigner -verify android/app/build/outputs/bundle/release/app-release.aab | tee /dev/stderr | grep -q "jar verified"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release-${{ steps.version.outputs.code }}
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      - name: Upload to Google Play
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ env.PACKAGE_NAME }}
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: ${{ env.TRACK }}
+          status: ${{ env.RELEASE_STATUS }}
+
+      - name: Remove signing files
+        if: always()
+        run: rm -f android/wisedish-release.keystore android/keystore.properties
