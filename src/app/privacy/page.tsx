@@ -11,7 +11,7 @@ const privacyContactEmail = process.env.NEXT_PUBLIC_PRIVACY_CONTACT_EMAIL?.trim(
 
 /** Renders contact line: real email from env, or literal `[your email]` until configured. */
 function ContactEmail({ className }: { className?: string }) {
-  const base = "font-medium text-[color:var(--accent)]";
+  const base = "font-medium text-[color:var(--accent-strong)]";
   if (privacyContactEmail) {
     return (
       <a href={`mailto:${privacyContactEmail}`} className={`${base} underline underline-offset-2 hover:opacity-90 ${className ?? ""}`}>
@@ -63,7 +63,7 @@ export default function PrivacyPage() {
                 for abuse monitoring per their privacy policy at{" "}
                 <a
                   href="https://openai.com/privacy"
-                  className="font-medium text-[color:var(--accent)] underline underline-offset-2 hover:opacity-90"
+                  className="font-medium text-[color:var(--accent-strong)] underline underline-offset-2 hover:opacity-90"
                   rel="noopener noreferrer"
                   target="_blank"
                 >
@@ -100,7 +100,7 @@ export default function PrivacyPage() {
                 their privacy policy at{" "}
                 <a
                   href="https://www.microsoft.com/privacy"
-                  className="font-medium text-[color:var(--accent)] underline underline-offset-2 hover:opacity-90"
+                  className="font-medium text-[color:var(--accent-strong)] underline underline-offset-2 hover:opacity-90"
                   rel="noopener noreferrer"
                   target="_blank"
                 >

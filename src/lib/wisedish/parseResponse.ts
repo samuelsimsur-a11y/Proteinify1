@@ -125,14 +125,12 @@ function parseIngredient(raw: unknown): Ingredient | null {
   const swapOptions = raw.swapOptions;
   if (!isString(id) || !isString(original) || !isString(current) || !isString(amount) || !isString(reason))
     return null;
-  if (!Array.isArray(swapOptions)) return null;
+  // Swap options are optional: swaps are requested as intents (see lib/wisedish/swap), not pre-baked lists.
   const opts: IngredientSwapOption[] = [];
-  for (const o of swapOptions) {
+  for (const o of Array.isArray(swapOptions) ? swapOptions.slice(0, 4) : []) {
     const p = parseIngredientSwapOption(o);
-    if (!p) return null;
-    opts.push(p);
+    if (p) opts.push(p);
   }
-  if (opts.length < 2 || opts.length > 4) return null;
 
   const proteinPer100g = parseOptionalNonnegNumber(raw, "proteinPer100g");
   const fatPer100g = parseOptionalNonnegNumber(raw, "fatPer100g");
@@ -151,6 +149,15 @@ function parseIngredient(raw: unknown): Ingredient | null {
     ...(carbsPer100g !== undefined ? { carbsPer100g } : {}),
     ...(caloriesPer100g !== undefined ? { caloriesPer100g } : {}),
   };
+}
+
+function parseCalories(raw: unknown): RecipeVersion["calories"] | undefined {
+  if (!isRecord(raw)) return undefined;
+  const pick = (v: unknown) => (isNumber(v) && Number.isFinite(v) && v > 0 ? Math.round(v) : null);
+  const before = pick(raw.before);
+  const after = pick(raw.after);
+  if (before === null && after === null) return undefined;
+  return { before, after };
 }
 
 function parseAdditionItem(raw: unknown): AdditionItem | null {
@@ -186,7 +193,7 @@ export function parseRecipeVersion(raw: unknown): RecipeVersion | null {
   const p = macrosRaw.p;
   const d = macrosRaw.d;
   if (!isNumber(p) || p < 0) return null;
-  if (!isNumber(d) || d < 0) return null;
+  if (!isNumber(d)) return null;
   if (
     !isNumber(tasteScore) ||
     !isNumber(realismScore) ||
@@ -266,6 +273,7 @@ export function parseRecipeVersion(raw: unknown): RecipeVersion | null {
 
   const cookTimeMinutes = parseCookTimeMinutesField(raw.cookTimeMinutes);
   const difficulty = parseDifficultyField(raw.difficulty);
+  const calories = parseCalories(raw.calories);
 
   return {
     id: id as RecipeVersion["id"],
@@ -279,6 +287,7 @@ export function parseRecipeVersion(raw: unknown): RecipeVersion | null {
     ...(mealPrepNote !== undefined ? { mealPrepNote } : {}),
     ...(proteinMathWarning !== undefined ? { proteinMathWarning } : {}),
     ...(dilConsistencyWarning !== undefined ? { dilConsistencyWarning } : {}),
+    ...(calories ? { calories } : {}),
     tasteScore,
     realismScore,
     aggressivenessScore,
@@ -410,6 +419,117 @@ export function parseSingleVersionAiJson(
   return { ok: true, data };
 }
 
+/** Converts one /api/generate wire version (v2 shape) into the client RecipeVersion shape. */
+function normalizeWireVersion(raw: unknown, idx: number): unknown {
+  if (!isRecord(raw)) return raw;
+  if ("steps" in raw && "macros" in raw) return raw;
+
+  const id: RecipeVersion["id"] = idx === 0 ? "close-match" : idx === 1 ? "balanced" : "max-protein";
+  const defaultLabel: RecipeVersion["label"] =
+    idx === 0 ? "Close Match" : idx === 1 ? "Balanced" : "Full Send";
+
+  const name = raw.name;
+  const summary = raw.summary;
+  const originalProteinG = raw.originalProteinG;
+  const proteinDeltaG = raw.proteinDeltaG;
+  const totalProteinG = raw.totalProteinG;
+  const why = raw.summary;
+  const swapSummary = raw.swapSummary;
+  const mealPrepNote = raw.mealPrepNote;
+  const proteinMathWarning = raw.proteinMathWarning;
+  const dilConsistencyWarning = raw.dilConsistencyWarning;
+
+  const ingredientsRaw = raw.ingredients;
+  const instructionsRaw = raw.instructions;
+  const ingredients: unknown[] = Array.isArray(ingredientsRaw) ? ingredientsRaw : [];
+  const instructions: unknown[] = Array.isArray(instructionsRaw) ? instructionsRaw : [];
+
+  const stepsBuilt = instructions.map((stepObj) => {
+    if (!isRecord(stepObj)) return "";
+    const step = stepObj.step;
+    const heatGuard = stepObj.heatGuard;
+    const textureNote = stepObj.textureNote;
+    if (!isString(step)) return "";
+    const details = [
+      isString(heatGuard) ? heatGuard : null,
+      isString(textureNote) ? textureNote : null,
+    ].filter(Boolean) as string[];
+    if (details.length === 0) return step;
+    return `${step} ${details.join(" ")}`.trim();
+  });
+
+  const tbcWire = raw.transformationByComponent;
+  const maWire = raw.methodAdjustments;
+  const tbcParsed = parseTransformationByComponent(tbcWire);
+  const maParsed = parseMethodAdjustments(maWire);
+  const swapArr = Array.isArray(swapSummary) && swapSummary.every(isString) ? (swapSummary as string[]) : undefined;
+  const transformationByComponent = tbcParsed ?? fallbackTransformationFromSwapSummary(swapArr);
+  const methodAdjustments = maParsed ?? fallbackMethodAdjustments(stepsBuilt.filter(Boolean));
+
+  const cookTimeMinutes = parseCookTimeMinutesField(raw.cookTimeMinutes);
+  const difficulty = parseDifficultyField(raw.difficulty);
+
+  return {
+    id,
+    label: isString(name) &&
+      (name === "Close Match" || name === "Balanced" || name === "Full Send" || name === "Fully Light")
+      ? name
+      : defaultLabel,
+    summary: isString(summary) ? summary : "",
+    cookTimeMinutes,
+    difficulty,
+    macros: {
+      p: isNumber(totalProteinG)
+        ? totalProteinG
+        : (isNumber(originalProteinG) ? originalProteinG : 0) + (isNumber(proteinDeltaG) ? proteinDeltaG : 0),
+      d: isNumber(proteinDeltaG) ? proteinDeltaG : 0,
+    },
+    // Keep UI scores stable with sensible defaults when route uses v2 schema.
+    tasteScore: 8,
+    realismScore: 8,
+    aggressivenessScore: idx === 0 ? 4 : idx === 1 ? 7 : 9,
+    why: isString(why) ? why : "",
+    adds: [],
+    transformationByComponent,
+    methodAdjustments,
+    ...(Array.isArray(swapSummary) ? { swapSummary } : {}),
+    ...(mealPrepNote === null || isString(mealPrepNote) ? { mealPrepNote } : {}),
+    ...(proteinMathWarning === null || isString(proteinMathWarning) ? { proteinMathWarning } : {}),
+    ...(dilConsistencyWarning === null || isString(dilConsistencyWarning)
+      ? { dilConsistencyWarning }
+      : {}),
+    ...(isNumber(raw.caloriesPerServing) || isNumber(raw.originalCaloriesPerServing)
+      ? {
+          calories: {
+            before: isNumber(raw.originalCaloriesPerServing) ? raw.originalCaloriesPerServing : null,
+            after: isNumber(raw.caloriesPerServing) ? raw.caloriesPerServing : null,
+          },
+        }
+      : {}),
+    ingredients: ingredients.map((ing, i) => {
+      if (!isRecord(ing)) return ing;
+      const nameVal = ing.name;
+      const amountVal = ing.amount;
+      const noteVal = ing.note;
+      return {
+        id: `ing-${idx + 1}-${i + 1}`,
+        original: isString(nameVal) ? nameVal : "ingredient",
+        current: isString(nameVal) ? nameVal : "ingredient",
+        amount: isString(amountVal) ? amountVal : "",
+        reason: isString(noteVal) ? noteVal : "",
+        swapOptions: [],
+        ...(isNumber(ing.proteinContributionG) ? { proteinPer100g: ing.proteinContributionG } : {}),
+      };
+    }),
+    steps: stepsBuilt,
+  };
+}
+
+/** Parses a single wire version (e.g. a swap result) at tier index 0–2. */
+export function parseWireVersion(raw: unknown, idx: number): RecipeVersion | null {
+  return parseRecipeVersion(normalizeWireVersion(raw, idx));
+}
+
 export function parseWiseDishResponseJson(json: unknown): ParseResult {
   const disambiguation = parseDisambiguationResponse(json);
   if (disambiguation) return disambiguation;
@@ -439,118 +559,7 @@ export function parseWiseDishResponseJson(json: unknown): ParseResult {
     return { ok: false, error: "versions must be an array of length 3." };
   }
 
-  // Accept both legacy wire shape and the newer /api/generate v2 shape.
-  const normalizeVersion = (raw: unknown, idx: number): unknown => {
-    if (!isRecord(raw)) return raw;
-    if ("steps" in raw && "macros" in raw) return raw;
-
-    const id: RecipeVersion["id"] = idx === 0 ? "close-match" : idx === 1 ? "balanced" : "max-protein";
-    const defaultLabel: RecipeVersion["label"] =
-      idx === 0 ? "Close Match" : idx === 1 ? "Balanced" : "Full Send";
-
-    const name = raw.name;
-    const summary = raw.summary;
-    const originalProteinG = raw.originalProteinG;
-    const proteinDeltaG = raw.proteinDeltaG;
-    const totalProteinG = raw.totalProteinG;
-    const why = raw.summary;
-    const swapSummary = raw.swapSummary;
-    const mealPrepNote = raw.mealPrepNote;
-    const proteinMathWarning = raw.proteinMathWarning;
-    const dilConsistencyWarning = raw.dilConsistencyWarning;
-
-    const ingredientsRaw = raw.ingredients;
-    const instructionsRaw = raw.instructions;
-    const ingredients: unknown[] = Array.isArray(ingredientsRaw) ? ingredientsRaw : [];
-    const instructions: unknown[] = Array.isArray(instructionsRaw) ? instructionsRaw : [];
-
-    const stepsBuilt = instructions.map((stepObj) => {
-      if (!isRecord(stepObj)) return "";
-      const step = stepObj.step;
-      const heatGuard = stepObj.heatGuard;
-      const textureNote = stepObj.textureNote;
-      if (!isString(step)) return "";
-      const details = [
-        isString(heatGuard) ? heatGuard : null,
-        isString(textureNote) ? textureNote : null,
-      ].filter(Boolean) as string[];
-      if (details.length === 0) return step;
-      return `${step} ${details.join(" ")}`.trim();
-    });
-
-    const tbcWire = raw.transformationByComponent;
-    const maWire = raw.methodAdjustments;
-    const tbcParsed = parseTransformationByComponent(tbcWire);
-    const maParsed = parseMethodAdjustments(maWire);
-    const swapArr = Array.isArray(swapSummary) && swapSummary.every(isString) ? (swapSummary as string[]) : undefined;
-    const transformationByComponent = tbcParsed ?? fallbackTransformationFromSwapSummary(swapArr);
-    const methodAdjustments = maParsed ?? fallbackMethodAdjustments(stepsBuilt.filter(Boolean));
-
-    const cookTimeMinutes = parseCookTimeMinutesField(raw.cookTimeMinutes);
-    const difficulty = parseDifficultyField(raw.difficulty);
-
-    return {
-      id,
-      label: isString(name) &&
-        (name === "Close Match" || name === "Balanced" || name === "Full Send" || name === "Fully Light")
-        ? name
-        : defaultLabel,
-      summary: isString(summary) ? summary : "",
-      cookTimeMinutes,
-      difficulty,
-      macros: {
-        p: isNumber(totalProteinG)
-          ? totalProteinG
-          : (isNumber(originalProteinG) ? originalProteinG : 0) + (isNumber(proteinDeltaG) ? proteinDeltaG : 0),
-        d: isNumber(proteinDeltaG) ? proteinDeltaG : 0,
-      },
-      // Keep UI scores stable with sensible defaults when route uses v2 schema.
-      tasteScore: 8,
-      realismScore: 8,
-      aggressivenessScore: idx === 0 ? 4 : idx === 1 ? 7 : 9,
-      why: isString(why) ? why : "",
-      adds: [],
-      transformationByComponent,
-      methodAdjustments,
-      ...(Array.isArray(swapSummary) ? { swapSummary } : {}),
-      ...(mealPrepNote === null || isString(mealPrepNote) ? { mealPrepNote } : {}),
-      ...(proteinMathWarning === null || isString(proteinMathWarning) ? { proteinMathWarning } : {}),
-      ...(dilConsistencyWarning === null || isString(dilConsistencyWarning)
-        ? { dilConsistencyWarning }
-        : {}),
-      ingredients: ingredients.map((ing, i) => {
-        if (!isRecord(ing)) return ing;
-        const nameVal = ing.name;
-        const amountVal = ing.amount;
-        const noteVal = ing.note;
-        return {
-          id: `ing-${idx + 1}-${i + 1}`,
-          original: isString(nameVal) ? nameVal : "ingredient",
-          current: isString(nameVal) ? nameVal : "ingredient",
-          amount: isString(amountVal) ? amountVal : "",
-          reason: isString(noteVal) ? noteVal : "",
-          swapOptions: [
-            {
-              type: "higher-protein",
-              label: "Higher protein option",
-              replacement: isString(nameVal) ? `${nameVal} (higher protein)` : "higher protein option",
-              effect: "Increases protein density",
-            },
-            {
-              type: "more-authentic",
-              label: "More authentic option",
-              replacement: isString(nameVal) ? nameVal : "original ingredient",
-              effect: "Preserves dish identity",
-            },
-          ],
-          ...(isNumber(ing.proteinContributionG) ? { proteinPer100g: ing.proteinContributionG } : {}),
-        };
-      }),
-      steps: stepsBuilt,
-    };
-  };
-
-  const versions = rawVersions.map((v, idx) => normalizeVersion(v, idx));
+  const versions = rawVersions.map((v, idx) => normalizeWireVersion(v, idx));
 
   const v0 = parseRecipeVersion(versions[0]);
   const v1 = parseRecipeVersion(versions[1]);

@@ -1,5 +1,5 @@
 import type { GenerateApiRequestBody } from "./apiContract";
-import type { WiseDishResponse, RecipeVersion } from "./types";
+import type { RecipeVersion } from "./types";
 import {
   getApiRequestEndpointCandidates,
   isLikelyOffline,
@@ -11,6 +11,7 @@ import {
   isParseSuccess,
   parseWiseDishResponseJson,
   parseRecipeVersion,
+  parseWireVersion,
   type ParseResult,
 } from "./parseResponse";
 
@@ -366,4 +367,118 @@ export async function postGenerate(body: GenerateApiRequestBody): Promise<ParseR
   }
 
   return parseWiseDishResponseJson(json);
+}
+
+/**
+ * POSTs JSON to an API path, trying each configured origin (web: same origin; Android: production
+ * and legacy hosts). Used by swaps and feedback.
+ */
+export async function postApiJson(
+  path: "/api/generate" | "/api/feedback",
+  body: unknown,
+  timeoutMs: number
+): Promise<{ ok: true; status: number; json: unknown } | { ok: false; error: string }> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const candidates = getApiRequestEndpointCandidates(path);
+  try {
+    for (let i = 0; i < candidates.length; i++) {
+      const endpoint = candidates[i]!;
+      let res: Response;
+      try {
+        res = await fetchJsonWithRetry(
+          endpoint,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            signal: ctrl.signal,
+          },
+          1
+        );
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") throw e;
+        continue;
+      }
+      if (isRetryableOriginStatus(res.status, i < candidates.length - 1)) continue;
+      markApiEndpointSuccess(endpoint);
+      const text = await res.text();
+      let json: unknown = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        return { ok: false, error: `Request failed (${res.status})` };
+      }
+      return { ok: true, status: res.status, json };
+    }
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      return { ok: false, error: "That took too long — try again." };
+    }
+    return { ok: false, error: "Network error: could not reach the server." };
+  } finally {
+    clearTimeout(timer);
+  }
+  if (isLikelyOffline()) return { ok: false, error: "No internet connection detected. Reconnect and try again." };
+  return { ok: false, error: "Network error: could not reach the server." };
+}
+
+export type SwapIntent = "higher-protein" | "closer-to-original" | "remove" | "replace";
+
+export type SwapResult = { ok: true; version: RecipeVersion; swapNote: string } | { ok: false; error: string };
+
+const SWAP_TIMEOUT_MS = 90_000;
+
+/** Rewrites one version with a single ingredient change; the other versions stay untouched. */
+export async function postSwap(args: {
+  dish: string;
+  transformationMode: GenerateApiRequestBody["transformationMode"];
+  servings: number;
+  versionIndex: 0 | 1 | 2;
+  version: RecipeVersion;
+  ingredient: { name: string; amount: string };
+  intent: SwapIntent;
+  replacement?: string;
+  importedRecipe?: GenerateApiRequestBody["importedRecipe"];
+  cachedClassification?: GenerateApiRequestBody["cachedClassification"];
+}): Promise<SwapResult> {
+  const v = args.version;
+  const total = v.totalProteinG ?? v.macros.p;
+  const payload = {
+    dish: args.dish,
+    transformationMode: args.transformationMode,
+    servings: args.servings,
+    importedRecipe: args.importedRecipe,
+    cachedClassification: args.cachedClassification,
+    swap: {
+      tier: v.id,
+      intent: args.intent,
+      replacement: args.replacement ?? null,
+      ingredient: args.ingredient,
+      version: {
+        summary: v.summary,
+        originalProteinG: Math.max(0, total - v.macros.d),
+        totalProteinG: total,
+        originalCaloriesPerServing: v.calories?.before ?? null,
+        caloriesPerServing: v.calories?.after ?? null,
+        cookTimeMinutes: v.cookTimeMinutes,
+        difficulty: v.difficulty,
+        ingredients: v.ingredients.map((i) => ({ name: i.current, amount: i.amount, note: i.reason })),
+        steps: v.steps,
+        methodAdjustments: v.methodAdjustments,
+        swapSummary: v.swapSummary ?? [],
+      },
+    },
+  };
+
+  const r = await postApiJson("/api/generate", payload, SWAP_TIMEOUT_MS);
+  if (!r.ok) return r;
+  const json = (r.json ?? {}) as Record<string, unknown>;
+  if (r.status >= 400) {
+    const msg = typeof json.error === "string" ? `${json.error} [${r.status}]` : `Request failed (${r.status})`;
+    return { ok: false, error: msg };
+  }
+  const parsed = parseWireVersion(json.version, args.versionIndex);
+  if (!parsed) return { ok: false, error: "We got an incomplete recipe back." };
+  return { ok: true, version: parsed, swapNote: typeof json.swapNote === "string" ? json.swapNote : "" };
 }

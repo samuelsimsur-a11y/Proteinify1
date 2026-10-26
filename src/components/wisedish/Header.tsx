@@ -183,7 +183,7 @@ export default function Header() {
             aria-label={savedCount > 0 ? `My recipes, ${savedCount} saved` : "My recipes"}
             className={[
               "relative z-10 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[var(--radius-pill)] border px-2.5 sm:h-11 sm:px-3.5",
-              "whitespace-nowrap bg-[color:var(--surface-offset)] text-[color:var(--accent)]",
+              "whitespace-nowrap bg-[color:var(--surface-offset)] text-[color:var(--accent-strong)]",
               "border-[color:rgba(200,170,106,0.45)] hover:border-[color:var(--accent)]",
             ].join(" ")}
           >

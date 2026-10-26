@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { RecipeVersion, TransformationMode } from "@/lib/wisedish/types";
 import { displayVersionLabel } from "@/lib/wisedish/displayVersionLabel";
+import { sendFeedback } from "@/lib/feedback/sendFeedback";
 
 type Props = {
   dish: string;
@@ -18,32 +19,17 @@ const FEEDBACK_TAGS = [
   "too much effort",
   "not enough protein",
   "protein numbers seem wrong",
+  "app bug",
   "other",
 ] as const;
 
 type FeedbackTag = (typeof FEEDBACK_TAGS)[number];
 
-function buildFeedbackUrl(params: {
-  resultId: string;
-  dish: string;
-  versionId: RecipeVersion["id"];
-  rating: "up" | "down";
-  tag?: FeedbackTag;
-}) {
-  const origin = window.location.origin;
-  const url = new URL("/feedback", origin);
-  url.searchParams.set("resultId", params.resultId);
-  url.searchParams.set("dish", params.dish);
-  url.searchParams.set("version", params.versionId);
-  url.searchParams.set("rating", params.rating);
-  if (params.tag) url.searchParams.set("tag", params.tag);
-  return url.toString();
-}
-
 export default function FeedbackButton({ dish, resultId, version, transformationMode }: Props) {
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState<"up" | "down">("up");
   const [tag, setTag] = useState<FeedbackTag>("other");
+  const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [statusText, setStatusText] = useState("");
 
@@ -64,32 +50,24 @@ export default function FeedbackButton({ dish, resultId, version, transformation
   const submitFeedback = async () => {
     setSubmitting(true);
     setStatusText("");
-    try {
-      const payload = {
-        rating: rating === "up" ? 1 : -1,
-        category: rating === "down" ? tag : "positive",
-        message: "",
-        context: {
-          resultId,
-          dish,
-          version: version.id,
-          transformationMode,
-        },
-      };
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        setStatusText("Could not submit feedback right now.");
-        return;
-      }
-      setStatusText("Feedback submitted. Thank you.");
-    } catch {
-      setStatusText("Network issue while submitting feedback.");
-    } finally {
-      setSubmitting(false);
+    const ok = await sendFeedback({
+      rating: rating === "up" ? 1 : -1,
+      category: rating === "down" ? tag : "positive",
+      message: message.trim(),
+      context: {
+        resultId,
+        dish,
+        version: displayVersionLabel(version, transformationMode),
+        transformationMode,
+      },
+    });
+    setSubmitting(false);
+    if (ok) {
+      setStatusText("Thanks — your feedback reached us.");
+      setMessage("");
+      window.setTimeout(() => setOpen(false), 1200);
+    } else {
+      setStatusText("Couldn't send right now. Check your connection and try again.");
     }
   };
 
@@ -99,7 +77,7 @@ export default function FeedbackButton({ dish, resultId, version, transformation
         type="button"
         title={title}
         onClick={() => setOpen((v) => !v)}
-      className="min-h-11 rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] transition hover:bg-[color:var(--surface-offset)]"
+        className="min-h-11 rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] transition hover:bg-[color:var(--surface-offset)]"
       >
         Feedback
       </button>
@@ -107,7 +85,7 @@ export default function FeedbackButton({ dish, resultId, version, transformation
       {open ? (
         <div
           role="presentation"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:rgba(0,0,0,0.35)] p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[color:rgba(0,0,0,0.35)] p-4 sm:items-center"
           onClick={() => setOpen(false)}
         >
           <div
@@ -118,8 +96,12 @@ export default function FeedbackButton({ dish, resultId, version, transformation
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-[color:var(--text-primary)]">Rate this version</div>
-              <button type="button" onClick={() => setOpen(false)} className="text-xs text-[color:var(--text-muted)]">
+              <div className="text-sm font-semibold text-[color:var(--text-primary)]">{title}</div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="min-h-11 px-2 text-xs text-[color:var(--text-muted)]"
+              >
                 Close
               </button>
             </div>
@@ -127,83 +109,79 @@ export default function FeedbackButton({ dish, resultId, version, transformation
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
+                aria-pressed={rating === "up"}
                 onClick={() => setRating("up")}
                 className={[
-                  "flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                  "min-h-11 flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition",
                   rating === "up"
                     ? "border-[color:var(--accent-forest)] bg-[color:var(--accent-forest-light)] text-[color:var(--accent-forest)]"
-                    : "border-[color:var(--divider)] bg-[color:var(--surface-card)]",
+                    : "border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[color:var(--text-primary)]",
                 ].join(" ")}
               >
-                Upvote
+                👍 Good
               </button>
               <button
                 type="button"
+                aria-pressed={rating === "down"}
                 onClick={() => setRating("down")}
                 className={[
-                  "flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                  "min-h-11 flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition",
                   rating === "down"
-                    ? "border-[#C73A2B] bg-[rgba(199,58,43,0.12)] text-[#C73A2B]"
-                    : "border-[color:var(--divider)] bg-[color:var(--surface-card)]",
+                    ? "border-[#C73A2B] bg-[rgba(199,58,43,0.12)] text-[#A82E21]"
+                    : "border-[color:var(--divider)] bg-[color:var(--surface-card)] text-[color:var(--text-primary)]",
                 ].join(" ")}
               >
-                Downvote
+                👎 Not great
               </button>
             </div>
 
-            <div className="mt-3 text-[11px] text-[color:var(--text-muted)]">
-              {rating === "down"
-                ? "What went wrong?"
-                : "Optional tag (for downvotes we recommend choosing one)."}
-            </div>
+            {rating === "down" ? (
+              <>
+                <label className="mt-3 block text-[11px] text-[color:var(--text-muted)]" htmlFor="feedback-tag">
+                  What went wrong?
+                </label>
+                <select
+                  id="feedback-tag"
+                  value={tag}
+                  onChange={(e) => setTag(e.target.value as FeedbackTag)}
+                  className="mt-1 min-h-11 w-full rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-2 text-xs text-[color:var(--text-primary)]"
+                >
+                  {FEEDBACK_TAGS.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : null}
 
-            <div className="mt-2">
-              <select
-                value={tag}
-                onChange={(e) => setTag(e.target.value as FeedbackTag)}
-                className="w-full rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-2 text-xs text-[color:var(--text-primary)]"
-              >
-                {FEEDBACK_TAGS.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              maxLength={2000}
+              rows={3}
+              aria-label="Your feedback"
+              placeholder="Tell us more (optional)"
+              className="mt-3 w-full rounded-xl border border-[color:var(--divider)] bg-[color:var(--bg)] px-3 py-2 text-xs text-[color:var(--text-primary)] placeholder:text-[color:var(--text-muted)]"
+            />
 
             <button
               type="button"
-              onClick={submitFeedback}
+              onClick={() => void submitFeedback()}
               disabled={submitting}
-              className="mt-3 w-full rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-offset)] px-3 py-2 text-xs font-semibold text-[color:var(--text-primary)] hover:bg-[color:var(--surface-card)]"
+              className="mt-3 min-h-11 w-full rounded-xl bg-[color:var(--accent)] px-3 py-2 text-xs font-bold text-[color:var(--on-accent)] disabled:opacity-60"
             >
-              {submitting ? "Submitting..." : "Submit feedback"}
+              {submitting ? "Sending…" : "Send feedback"}
             </button>
-
-            <button
-              type="button"
-              onClick={async () => {
-                const feedbackUrl = buildFeedbackUrl({
-                  resultId,
-                  dish,
-                  versionId: version.id,
-                  rating,
-                  tag: rating === "down" ? tag : undefined,
-                });
-                await navigator.clipboard.writeText(feedbackUrl);
-              }}
-              className="mt-2 w-full rounded-xl bg-[color:var(--text-primary)] px-3 py-2 text-xs font-semibold text-[color:var(--surface-card)] hover:brightness-[0.98]"
-            >
-              Copy feedback link
-            </button>
-            <div className="mt-2 text-[11px] text-[color:var(--text-muted)]">
-              No account needed.
-            </div>
-            {statusText ? <div className="mt-2 text-[11px] text-[color:var(--text-muted)]">{statusText}</div> : null}
+            <div className="mt-2 text-[11px] text-[color:var(--text-muted)]">No account needed.</div>
+            {statusText ? (
+              <div role="status" className="mt-2 text-[11px] text-[color:var(--text-primary)]">
+                {statusText}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
     </div>
   );
 }
-

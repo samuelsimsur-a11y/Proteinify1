@@ -27,7 +27,7 @@ export const COMPONENT_SLOTS: {
     key: "sauceBroth",
     label: "Sauce / broth",
     hint: "Liquid lane, soup, curry, reduction",
-    mark: "🍜",
+    mark: "🥣",
     dotClass: "bg-[#4A7AB8]",
   },
   {

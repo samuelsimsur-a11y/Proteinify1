@@ -76,6 +76,8 @@ export type RecipeVersion = {
   proteinMathWarning?: string | null;
   /** Biryani: prose conflicts with DIL when swap codes were empty or wrong. */
   dilConsistencyWarning?: string | null;
+  /** Estimated kcal per serving: original dish (before) vs this version (after). */
+  calories?: { before: number | null; after: number | null };
   tasteScore: number; // 0-10
   realismScore: number; // 0-10
   aggressivenessScore: number; // 0-10

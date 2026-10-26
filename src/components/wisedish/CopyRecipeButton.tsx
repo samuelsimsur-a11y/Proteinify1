@@ -4,16 +4,27 @@ import type { RecipeVersion, TransformationMode } from "@/lib/wisedish/types";
 import { displayVersionLabel } from "@/lib/wisedish/displayVersionLabel";
 import { humanizeIngredientDisplay } from "./humanizeIngredientDisplay";
 import { useEffect, useState } from "react";
+import { track } from "@/lib/analytics";
 
 type Props = {
   dishLabel: string;
   version: RecipeVersion;
   transformationMode: TransformationMode;
+  /** Portion count shown in the UI; amounts are copied at this size. */
+  servings?: number;
+  formatAmount?: (amount: string) => string;
 };
 
-function buildRecipeText(dishLabel: string, version: RecipeVersion, transformationMode: TransformationMode) {
+function buildRecipeText(
+  dishLabel: string,
+  version: RecipeVersion,
+  transformationMode: TransformationMode,
+  servings?: number,
+  formatAmount: (amount: string) => string = (a) => a
+) {
   const lines: string[] = [];
   lines.push(`${displayVersionLabel(version, transformationMode)}: ${dishLabel}`);
+  if (servings) lines.push(`Serves ${servings}`);
   lines.push("");
   lines.push(humanizeIngredientDisplay(version.summary));
   lines.push("");
@@ -44,13 +55,19 @@ function buildRecipeText(dishLabel: string, version: RecipeVersion, transformati
   lines.push(
     `Protein per serving: ${startProtein}g → ${totalP}g (${gainProtein >= 0 ? `+${gainProtein}g` : `${gainProtein}g`}).`
   );
-  lines.push("Wise Dish shows protein only — not calories, fat, or carbs.");
+  if (version.calories?.after) {
+    lines.push(
+      version.calories.before
+        ? `Calories per serving (estimate): ~${version.calories.before} → ~${version.calories.after} kcal.`
+        : `Calories per serving (estimate): ~${version.calories.after} kcal.`
+    );
+  }
   lines.push("");
   lines.push("Ingredients (full list):");
   for (const ing of version.ingredients) {
     const note = ing.reason?.trim() ? ` — ${humanizeIngredientDisplay(ing.reason)}` : "";
     lines.push(
-      `- ${humanizeIngredientDisplay(ing.amount)} ${humanizeIngredientDisplay(ing.current)}${note}`
+      `- ${humanizeIngredientDisplay(formatAmount(ing.amount))} ${humanizeIngredientDisplay(ing.current)}${note}`
     );
   }
   lines.push("");
@@ -70,7 +87,7 @@ function buildRecipeText(dishLabel: string, version: RecipeVersion, transformati
   return lines.join("\n");
 }
 
-export default function CopyRecipeButton({ dishLabel, version, transformationMode }: Props) {
+export default function CopyRecipeButton({ dishLabel, version, transformationMode, servings, formatAmount }: Props) {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastFading, setToastFading] = useState(false);
   const [toastSeq, setToastSeq] = useState(0);
@@ -93,13 +110,18 @@ export default function CopyRecipeButton({ dishLabel, version, transformationMod
       <button
         type="button"
         onClick={async () => {
-          const text = buildRecipeText(dishLabel, version, transformationMode);
-          await navigator.clipboard.writeText(text);
+          const text = buildRecipeText(dishLabel, version, transformationMode, servings, formatAmount);
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch {
+            return;
+          }
+          track("recipe_copied", { tier: version.id });
           setToastSeq((s) => s + 1);
           setToastFading(false);
           setToastVisible(true);
         }}
-        className="min-h-11 rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] transition hover:bg-[color:var(--accent-light)] hover:text-[color:var(--accent)]"
+        className="min-h-11 rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-1.5 text-xs font-semibold text-[color:var(--text-muted)] transition hover:bg-[color:var(--accent-light)] hover:text-[color:var(--accent-strong)]"
       >
         Copy recipe
       </button>

@@ -10,6 +10,8 @@ import { checkGenerateRateLimit, getClientIp } from "@/lib/rateLimit/generateRou
 import { getDishByIdOrAlias, validateDILIntegrity } from "@/lib/culinary/dil/loader";
 import { getWisedishSchema } from "@/lib/culinary/dil/loadWisedishSchema";
 import { patchWiseDishSchemaForDil } from "@/lib/wisedish/ai/dilSchemaPatch";
+import { buildSingleTierSwapSchema } from "@/lib/wisedish/ai/compactSchemaPatch";
+import { buildSwapUserMessage, tierWireName, validateSwapRequest } from "@/lib/wisedish/swap/swapRequest";
 import {
   checkCataloguedDishTierText,
   dishTextRetryAppend,
@@ -43,7 +45,7 @@ import {
   responseHasBlockerViolations,
   type NormalizedSliders,
 } from "@/lib/culinary/promptLayers/userIntent";
-import { API_CORS_HEADERS, withCorsHeaders } from "@/lib/http/cors";
+import { originOf, withCorsHeaders } from "@/lib/http/cors";
 import type { DishDNA, SwapInput, UserGoal, ValidationResult } from "@/lib/culinary/dil/schemas";
 
 const OPENAI_TIMEOUT_MS = 90_000;
@@ -53,17 +55,17 @@ function requestIdFrom(req: NextRequest): string {
   return req.headers.get("x-request-id")?.trim() || crypto.randomUUID();
 }
 
-function jsonResponse(body: unknown, requestId: string, init?: ResponseInit): NextResponse {
+function jsonResponse(req: Request, body: unknown, requestId: string, init?: ResponseInit): NextResponse {
   return NextResponse.json(body, {
     ...init,
-    headers: withCorsHeaders({ "X-Request-Id": requestId, ...(init?.headers ?? {}) }),
+    headers: withCorsHeaders(originOf(req), { "X-Request-Id": requestId, ...(init?.headers ?? {}) }),
   });
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(req: Request) {
   return new NextResponse(null, {
     status: 204,
-    headers: API_CORS_HEADERS,
+    headers: withCorsHeaders(originOf(req)),
   });
 }
 
@@ -138,6 +140,7 @@ const inflightRequests = new Map<string, Promise<GenerateResponse>>();
 // sharedRecipe + 3 tiers still needs headroom; truncation yields invalid JSON and 502s.
 const MAX_COMPLETION_TOKENS = 12000;
 const QUICK_CLOSE_MAX_TOKENS = 3200;
+const SWAP_MAX_TOKENS = 5000;
 const DEFAULT_FULL_MODEL = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
 const DEFAULT_QUICK_MODEL = process.env.OPENAI_QUICK_MODEL?.trim() || "gpt-4.1-mini";
 
@@ -297,6 +300,8 @@ interface GenerateRequest {
     confidence?: "high" | "medium" | "low";
   };
   cachedClassification?: DishClassification;
+  /** Single-version ingredient swap (see lib/wisedish/swap/swapRequest.ts). */
+  swap?: unknown;
 }
 
 // ─── Response shape ───────────────────────────────────────────────────────────
@@ -334,6 +339,9 @@ export interface VersionResult {
     textureNote: string | null;
   }>;
   mealPrepNote: string | null;
+  /** Estimated kcal per serving (model estimate; null when unavailable). */
+  originalCaloriesPerServing: number | null;
+  caloriesPerServing: number | null;
   dilValidation: ValidationResult | null;
   proteinMathWarning: string | null;   // surfaces when delta looks implausible
   /** Set when biryani tier prose conflicts with DIL (even if appliedSwapCodes is empty). */
@@ -393,10 +401,12 @@ type TierPayload = {
   ingredientChanges: TierIngredientChange[];
   instructionChanges: RecipeInstructionRow[];
   mealPrepNote: string | null;
+  caloriesPerServing?: number;
 };
 
 type SharedRecipePayload = {
   originalProteinG: number;
+  originalCaloriesPerServing?: number;
   ingredients: RecipeIngredientRow[];
   instructions: RecipeInstructionRow[];
 };
@@ -412,6 +422,11 @@ const EMPTY_COMPONENT_MAP: TransformationByComponentWire = {
 function normalizeTierCookTime(raw: unknown): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return 35;
   return Math.max(5, Math.min(720, Math.round(raw)));
+}
+
+function normalizeCalories(raw: unknown): number | null {
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return null;
+  return Math.min(5000, Math.round(raw));
 }
 
 function normalizeTierDifficulty(raw: unknown): TierDifficulty {
@@ -489,6 +504,8 @@ function mergeSharedWithTier(
     ingredients,
     instructions,
     mealPrepNote: tier.mealPrepNote,
+    originalCaloriesPerServing: normalizeCalories(shared.originalCaloriesPerServing),
+    caloriesPerServing: normalizeCalories(tier.caloriesPerServing),
   };
 }
 
@@ -558,6 +575,8 @@ function expandParsedToMergedVersions(parsedObj: Record<string, unknown>): Omit<
       ingredients: rec.ingredients as RecipeIngredientRow[],
       instructions: rec.instructions as RecipeInstructionRow[],
       mealPrepNote: rec.mealPrepNote as string | null,
+      originalCaloriesPerServing: null,
+      caloriesPerServing: null,
     };
   });
 }
@@ -803,19 +822,185 @@ function buildUserMessage(
   return lines.join("\n");
 }
 
+// ─── Single-version ingredient swap ──────────────────────────────────────────
+function stringList(raw: unknown, max: number): string[] {
+  return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string" && x.trim() !== "").slice(0, max) : [];
+}
+
+function finiteNumber(raw: unknown, fallback: number): number {
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : fallback;
+}
+
+function singleTierToMergedRow(
+  obj: Record<string, unknown>,
+  name: VersionResult["name"],
+  originalProteinG: number
+): MergedVersionRow {
+  const tbcRaw = obj.transformationByComponent as Record<string, unknown> | undefined;
+  const transformationByComponent: TransformationByComponentWire = tbcRaw
+    ? {
+        protein: stringList(tbcRaw.protein, 4),
+        carbBase: stringList(tbcRaw.carbBase, 4),
+        sauceBroth: stringList(tbcRaw.sauceBroth, 4),
+        fat: stringList(tbcRaw.fat, 4),
+        toppings: stringList(tbcRaw.toppings, 4),
+      }
+    : EMPTY_COMPONENT_MAP;
+  const methodAdjustments = stringList(obj.methodAdjustments, 8);
+  const ingredients = (Array.isArray(obj.ingredients) ? obj.ingredients : [])
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && typeof (r as { name?: unknown }).name === "string")
+    .map((r) => ({
+      name: String(r.name),
+      amount: typeof r.amount === "string" ? r.amount : "",
+      proteinContributionG: finiteNumber(r.proteinContributionG, 0),
+      note: typeof r.note === "string" ? r.note : "",
+    }));
+  const instructions = (Array.isArray(obj.instructions) ? obj.instructions : [])
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && typeof (r as { step?: unknown }).step === "string")
+    .map((r) => ({
+      step: String(r.step),
+      heatGuard: typeof r.heatGuard === "string" ? r.heatGuard : null,
+      textureNote: typeof r.textureNote === "string" ? r.textureNote : null,
+    }));
+  if (ingredients.length === 0) throw new Error("Failed to parse model output: swap returned no ingredients.");
+
+  const baseline = finiteNumber(obj.originalProteinG, originalProteinG);
+  const total = finiteNumber(obj.totalProteinG, baseline);
+  return {
+    name,
+    summary: typeof obj.summary === "string" ? obj.summary : "",
+    proteinDeltaG: Math.round((total - baseline) * 10) / 10,
+    originalProteinG: baseline,
+    totalProteinG: total,
+    cookTimeMinutes: normalizeTierCookTime(obj.cookTimeMinutes),
+    difficulty: normalizeTierDifficulty(obj.difficulty),
+    appliedSwapCodes: [],
+    swapSummary: stringList(obj.swapSummary, 4),
+    transformationByComponent,
+    methodAdjustments:
+      methodAdjustments.length >= 2
+        ? methodAdjustments
+        : ["Follow the updated ingredient list below.", "Taste and adjust seasoning at the end."],
+    ingredients,
+    instructions,
+    mealPrepNote: typeof obj.mealPrepNote === "string" ? obj.mealPrepNote : null,
+    originalCaloriesPerServing: normalizeCalories(obj.originalCaloriesPerServing),
+    caloriesPerServing: normalizeCalories(obj.caloriesPerServing),
+  };
+}
+
+async function handleSwap(req: NextRequest, requestId: string, body: GenerateRequest): Promise<NextResponse> {
+  const parsed = validateSwapRequest(body.swap);
+  if (!parsed.ok) {
+    return jsonResponse(req, { error: parsed.error, code: "INVALID_REQUEST" }, requestId, { status: 400 });
+  }
+  const swap = parsed.value;
+  const dishInput = typeof body.dish === "string" ? body.dish.trim().slice(0, 160) : "";
+  if (!dishInput) {
+    return jsonResponse(req, { error: "dish and mode are required", code: "INVALID_REQUEST" }, requestId, { status: 400 });
+  }
+  const mode: Mode = (body.mode ?? body.transformationMode) === "lean" ? "lean" : "wisedish";
+  const servings = Math.max(1, Math.min(12, Math.round(body.servings ?? 1)));
+
+  try {
+    ensureIntegrity();
+    const classification =
+      body.cachedClassification && typeof body.cachedClassification === "object"
+        ? body.cachedClassification
+        : await classifyDish(dishInput);
+    const dilDish = getDishByIdOrAlias(dishInput);
+    const systemPrompt = buildSystemPrompt(
+      mode,
+      dilDish,
+      servings,
+      body.importedRecipe,
+      buildClassificationRules(classification),
+      dishInput
+    );
+    console.log(
+      `[generate:swap] dish="${dishInput}" tier=${swap.tier} intent=${swap.intent} ingredient="${swap.ingredient.name}"`
+    );
+
+    let userContent = buildSwapUserMessage(dishInput, swap);
+    let result: { version: VersionResult; swapNote: string } | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const completion = await createCompletionWithRetry({
+        model: DEFAULT_FULL_MODEL,
+        response_format: {
+          type: "json_schema",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          json_schema: buildSingleTierSwapSchema() as any,
+        },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userContent },
+        ],
+        temperature: 0.3,
+        max_completion_tokens: SWAP_MAX_TOKENS,
+      });
+      const choice = completion.choices[0];
+      const raw = choice?.message?.content;
+      if (!raw) throw new Error("OpenAI returned empty response");
+      const root = parseModelJson(raw, { finishReason: choice?.finish_reason ?? null });
+      if (!root || typeof root !== "object" || Array.isArray(root)) throw new Error("Failed to parse model output");
+      const obj = root as Record<string, unknown>;
+
+      const row = singleTierToMergedRow(obj, tierWireName(swap.tier), swap.version.originalProteinG);
+      const { versions, dishTextBlockers, classificationTextBlockers } = annotateVersionsWithDil(
+        [row],
+        dilDish,
+        body.userGoal,
+        classification
+      );
+      result = {
+        version: versions[0]!,
+        swapNote: typeof obj.swapNote === "string" ? obj.swapNote.slice(0, 300) : "",
+      };
+      if ((dishTextBlockers || classificationTextBlockers) && attempt === 0) {
+        const append = [
+          dishTextBlockers && dilDish?.id === "biryani" ? BIRYANI_GENERATION_RETRY_USER_APPEND : "",
+          dishTextBlockers && dilDish && dilDish.id !== "biryani" ? dishTextRetryAppend(dilDish.id) ?? "" : "",
+          classificationTextBlockers ? CLASSIFICATION_GENERATION_RETRY_USER_APPEND : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+        userContent = `${userContent}\n\n${append}`;
+        continue;
+      }
+      break;
+    }
+    if (!result) throw new Error("Generation produced no response");
+    return jsonResponse(req, { dish: dishInput, tier: swap.tier, ...result }, requestId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Internal server error";
+    console.error("[generate:swap] failed:", message);
+    const status = message.includes("parse") || message.includes("empty response") ? 502 : 500;
+    return jsonResponse(req, { error: message, code: "GENERATE_FAILED" }, requestId, { status });
+  }
+}
+
 // ─── POST handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   const requestId = requestIdFrom(req);
+  let body: GenerateRequest;
+  try {
+    body = (await req.json()) as GenerateRequest;
+  } catch {
+    return jsonResponse(req, { error: "Invalid JSON body.", code: "INVALID_REQUEST" }, requestId, { status: 400 });
+  }
+  if (!body || typeof body !== "object") {
+    return jsonResponse(req, { error: "Invalid request body.", code: "INVALID_REQUEST" }, requestId, { status: 400 });
+  }
   const ip = getClientIp(req);
-  const limited = checkGenerateRateLimit(ip);
+  // Quick previews ride along with a full generation, so they only count toward the short window.
+  const limited = checkGenerateRateLimit(ip, { countTowardDaily: !body.quickCloseMatch });
   if (!limited.ok) {
     if (limited.reason === "three-minute") {
       console.warn(`[ratelimit] IP=${ip} hit 3-minute limit`);
     } else {
       console.warn(`[ratelimit] IP=${ip} hit daily limit`);
     }
-    return jsonResponse(
-      { error: "Too many requests — try again in a few minutes.", code: "RATE_LIMITED" },
+    return jsonResponse(req, { error: "Too many requests — try again in a few minutes.", code: "RATE_LIMITED" },
       requestId,
       { status: 429 }
     );
@@ -825,17 +1010,19 @@ export async function POST(req: NextRequest) {
     getServerEnv();
   } catch (err) {
     console.error("[generate] OPENAI_API_KEY is not set");
-    return jsonResponse(
-      { error: err instanceof Error ? err.message : "API key not configured", code: "SERVER_ENV_INVALID" },
+    return jsonResponse(req, { error: err instanceof Error ? err.message : "API key not configured", code: "SERVER_ENV_INVALID" },
       requestId,
       { status: 500 }
     );
   }
 
+  if (body.swap !== undefined) {
+    return handleSwap(req, requestId, body);
+  }
+
   try {
     ensureIntegrity();
 
-    const body: GenerateRequest = await req.json();
     const {
       dish: dishInput,
       mode: requestMode,
@@ -853,7 +1040,7 @@ export async function POST(req: NextRequest) {
     const sliders = normalizeSlidersFromRequest(rawSliders);
 
     if (!dishInput || !mode) {
-      return jsonResponse({ error: "dish and mode are required", code: "INVALID_REQUEST" }, requestId, { status: 400 });
+      return jsonResponse(req, { error: "dish and mode are required", code: "INVALID_REQUEST" }, requestId, { status: 400 });
     }
 
     // Clamp servings to a sensible range
@@ -872,7 +1059,7 @@ export async function POST(req: NextRequest) {
     if (shouldUseCache) {
       const cached = getCachedResponse(cacheKey);
       if (cached) {
-        return jsonResponse(cached, requestId, { headers: { "x-generate-cache": "hit" } });
+        return jsonResponse(req, cached, requestId, { headers: { "x-generate-cache": "hit" } });
       }
     }
 
@@ -880,7 +1067,7 @@ export async function POST(req: NextRequest) {
       const existingInflight = inflightRequests.get(cacheKey);
       if (existingInflight) {
         const shared = await existingInflight;
-        return jsonResponse(shared, requestId, { headers: { "x-generate-cache": "shared-inflight" } });
+        return jsonResponse(req, shared, requestId, { headers: { "x-generate-cache": "shared-inflight" } });
       }
     }
 
@@ -894,8 +1081,7 @@ export async function POST(req: NextRequest) {
       classification.ambiguity_score === "high" &&
       classification.possible_variants.length > 1
     ) {
-      return jsonResponse(
-        {
+      return jsonResponse(req, {
           needsDisambiguation: true,
           assumedVariant: classification.assumed_variant,
           possibleVariants: classification.possible_variants,
@@ -1065,16 +1251,16 @@ export async function POST(req: NextRequest) {
     if (shouldUseCache) inflightRequests.set(cacheKey, generationPromise);
     try {
       const response = await generationPromise;
-      return jsonResponse(response, requestId);
+      return jsonResponse(req, response, requestId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Internal server error";
       const status = message.includes("parse") || message.includes("empty response") ? 502 : 500;
-      return jsonResponse({ error: message, code: "GENERATE_FAILED" }, requestId, { status });
+      return jsonResponse(req, { error: message, code: "GENERATE_FAILED" }, requestId, { status });
     } finally {
       if (shouldUseCache) inflightRequests.delete(cacheKey);
     }
   } catch (err) {
     console.error("[generate] unhandled error:", err);
-    return jsonResponse({ error: "Internal server error", code: "INTERNAL_ERROR" }, requestId, { status: 500 });
+    return jsonResponse(req, { error: "Internal server error", code: "INTERNAL_ERROR" }, requestId, { status: 500 });
   }
 }

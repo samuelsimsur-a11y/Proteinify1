@@ -22,6 +22,28 @@ export function humanizeGenerateError(raw: string | null | undefined): string | 
   if (/dish and mode are required|must not be empty/i.test(s)) {
     return "Enter a dish name first.";
   }
+  if (/Tell us what to use instead|Missing ingredient to swap/i.test(s)) {
+    return s;
+  }
+  if (
+    /Expected SSE|non-JSON|incomplete|must be (Close Match|Balanced|Full Send)|versions\[|versions must|Missing or invalid|not a JSON object|Unexpected response shape|Stream ended|complete payload/i.test(
+      s
+    )
+  ) {
+    return "We got an incomplete recipe back. Try again — shorter dish names help.";
+  }
+  const status = /\((\d{3})\)|\[(\d{3})\]/.exec(s);
+  const code = status ? Number(status[1] ?? status[2]) : null;
+  if (code !== null && code >= 500) {
+    return "Our kitchen had a hiccup on the server. Try again in a moment.";
+  }
+  if (code !== null && code >= 400) {
+    return "That request didn't work. Try a different dish name or try again.";
+  }
+  // Never show raw URLs or stack-ish details to cooks.
+  if (/https?:\/\/|@ \//.test(s)) {
+    return "Something went wrong on our side. Try again in a moment.";
+  }
 
   return s.length > 220 ? `${s.slice(0, 217)}…` : s;
 }

@@ -5,8 +5,8 @@ export default function WhyWiseDish() {
         <div className="pf-card p-6">
           <h2 className="font-display text-base font-semibold text-[color:var(--text-primary)]">Why Wise Dish</h2>
           <p className="mt-3 text-sm leading-relaxed text-[color:var(--text-muted)]">
-            Wise Dish upgrades dishes you already love into higher-protein versions you can actually cook. We optimise
-            for protein — not calories, not macros, not guilt.
+            Wise Dish upgrades dishes you already love into higher-protein versions you can actually cook. Protein
+            comes first; Lean Mode also estimates calories. No guilt either way.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] p-4">

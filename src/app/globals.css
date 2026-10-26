@@ -32,6 +32,15 @@
   --accent-gold: #c6a968;
   --accent-gold-light: rgba(198, 169, 104, 0.14);
 
+  /* Text on gold buttons (white on gold failed contrast) and gold-toned text links on light surfaces. */
+  --on-accent: #1e3047;
+  --accent-strong: #7d6328;
+
+  /* Tier accents: Close Match calm, Balanced cool, Full Send gold. */
+  --tier-close: #8fb3a0;
+  --tier-balanced: #6d8fb8;
+  --tier-full: #c6a968;
+
   /* Derived UI */
   --radius-pill: 50px;
   --radius-card: 20px;
@@ -66,6 +75,13 @@ html.dark {
 
   --accent-gold: #d2b274;
   --accent-gold-light: rgba(210, 178, 116, 0.16);
+
+  --on-accent: #0d1420;
+  --accent-strong: #d9bd85;
+
+  --tier-close: #6f9a86;
+  --tier-balanced: #7f9fc6;
+  --tier-full: #d2b274;
 
   --shadow-card: 0 4px 22px rgba(0, 0, 0, 0.4);
   --shadow-card-hover: 0 12px 34px rgba(0, 0, 0, 0.5);

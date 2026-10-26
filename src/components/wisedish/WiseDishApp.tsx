@@ -1,16 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type {
-  IngredientOverride,
-  WiseDishResponse,
-  RecipeVersion,
-  SliderValues,
-} from "@/lib/wisedish/types";
-import { generateQuickCloseMatch, postGenerate, streamGenerateFull } from "@/lib/wisedish/clientGenerate";
-import { GENERATE_ENDPOINT } from "@/lib/wisedish/clientGenerate";
+import type { WiseDishResponse, RecipeVersion, SliderValues } from "@/lib/wisedish/types";
+import { generateQuickCloseMatch, postSwap, streamGenerateFull, type SwapIntent } from "@/lib/wisedish/clientGenerate";
+import type { GenerateApiRequestBody } from "@/lib/wisedish/apiContract";
 import { importRecipeFromUrl } from "@/lib/import/clientImport";
-import { IMPORT_ENDPOINT } from "@/lib/import/clientImport";
 import {
   deleteRecipe,
   getLatestSavedRecipeByDishMode,
@@ -21,8 +15,10 @@ import {
   takeSelectedRecipeId,
   type SavedRecipe,
 } from "@/lib/recipeLog";
-import { getApiRequestEndpointCandidates, getResolvedApiBase } from "@/lib/apiBaseUrl";
-import HeroSection from "./HeroSection";
+import { bestProteinGain, getBakedExample } from "@/lib/wisedish/examples";
+import { humanizeGenerateError } from "@/lib/wisedish/userFacingErrors";
+import { track } from "@/lib/analytics";
+import HeroSection, { type HeroExample } from "./HeroSection";
 import OfflineBanner from "./OfflineBanner";
 import InputLab from "./InputLab";
 import ResultsPreview from "./ResultsPreview";
@@ -30,14 +26,13 @@ import HowItWorks from "./HowItWorks";
 import WhyWiseDish from "./WhyWiseDish";
 import type { ModeId } from "./InputLab";
 
-const EXAMPLE_CHIPS = [
-  "Mac & Cheese",
-  "Biryani",
-  "Ramen",
-  "Chicken Tikka",
-  "Pad Thai",
-  "Birria Tacos",
-  "Alfredo",
+const EXAMPLE_CHIPS = ["Mac & Cheese", "Biryani", "Ramen", "Chicken Tikka", "Pad Thai", "Birria Tacos", "Alfredo"];
+
+/** Hero chips: real numbers from the baked examples when available, otherwise these fallbacks. */
+const HERO_EXAMPLES: { dish: string; emoji: string; fallbackGainG: number }[] = [
+  { dish: "Biryani", emoji: "🍛", fallbackGainG: 34 },
+  { dish: "Birria Tacos", emoji: "🌮", fallbackGainG: 28 },
+  { dish: "Pad Thai", emoji: "🍜", fallbackGainG: 22 },
 ];
 
 function createResultId() {
@@ -45,7 +40,8 @@ function createResultId() {
   return `res-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-type VersionId = "close-match" | "balanced" | "max-protein";
+type VersionId = RecipeVersion["id"];
+type StreamingSlots = [RecipeVersion | null, RecipeVersion | null, RecipeVersion | null];
 
 const DEFAULT_SLIDERS: SliderValues = {
   tasteIntegrity: 8,
@@ -53,67 +49,30 @@ const DEFAULT_SLIDERS: SliderValues = {
   pantryRealism: 8,
 };
 
-const DEFAULT_DISH = "";
-const PERF_KEY = "wisedish_generate_perf_samples_v1";
-const LEGACY_PERF_KEY = "wisedish_generate_perf_samples_v1";
-const MAX_PERF_SAMPLES = 40;
-
-function emptyOverrides(): Record<VersionId, IngredientOverride[]> {
-  return {
-    "close-match": [],
-    balanced: [],
-    "max-protein": [],
-  };
-}
-
-type PerfSample = {
-  at: number;
-  dish: string;
-  cacheHit: boolean;
-  quickMs?: number;
-  fullMs?: number;
+const RECOMMENDED_SLIDERS: Record<ModeId, SliderValues> = {
+  wisedish: DEFAULT_SLIDERS,
+  lean: { tasteIntegrity: 7, proteinBoost: 4, pantryRealism: 7 },
 };
 
-function readPerfSamples(): PerfSample[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(PERF_KEY) ?? window.localStorage.getItem(LEGACY_PERF_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((x) => x && typeof x === "object") as PerfSample[];
-  } catch {
-    return [];
-  }
-}
+/** How long a quick Close Match preview may take before we stop waiting for it. */
+const QUICK_PREVIEW_TIMEOUT_MS = 45_000;
 
-function writePerfSamples(samples: PerfSample[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(PERF_KEY, JSON.stringify(samples.slice(-MAX_PERF_SAMPLES)));
-  } catch {
-    // ignore storage failures
-  }
-}
+type ImportContext = {
+  source: "youtube" | "tiktok";
+  originalTitle: string;
+  confidence: "high" | "medium" | "low";
+  ingredients: string[];
+  instructions: string[];
+};
 
-function percentile(values: number[], p: number): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const idx = Math.max(0, Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1));
-  return sorted[idx] ?? 0;
-}
+type GenerateSource = "typed" | "example" | "disambiguation" | "retry" | "regenerate";
 
-function toApiOverrides(o: Record<VersionId, IngredientOverride[]>) {
-  return {
-    "close-match": o["close-match"],
-    balanced: o.balanced,
-    "max-protein": o["max-protein"],
-  };
-}
-
-function toIngredientId(name: string, i: number): string {
-  return `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "ing"}-${i + 1}`;
-}
+type Notice = {
+  title: string;
+  subtitle?: string;
+  actionLabel: string;
+  onAction: () => void;
+};
 
 function isUrl(input: string): boolean {
   const v = input.trim().toLowerCase();
@@ -126,182 +85,115 @@ function isUrl(input: string): boolean {
   );
 }
 
-function buildFastCloseMatchDraft(dish: string): RecipeVersion {
-  const dishLower = dish.toLowerCase();
-  const looksBrothy =
-    dishLower.includes("ramen") ||
-    dishLower.includes("pho") ||
-    dishLower.includes("soup") ||
-    dishLower.includes("broth");
-
-  const ingredients = looksBrothy
-    ? [
-        { name: "Chicken stock (unsalted or low-sodium)", amount: "500ml", reason: "Base — broth body" },
-        { name: "Soy sauce + mirin (tare)", amount: "2 tbsp + 1 tbsp", reason: "Base — shoyu seasoning" },
-        { name: "Fresh ramen noodles", amount: "120g", reason: "Base — structure" },
-        { name: "Chicken thigh or breast", amount: "140–180g", reason: "Base + boost — primary protein" },
-        { name: "Neutral oil, garlic, ginger", amount: "2 tbsp + 2 cloves + 1 tsp", reason: "Base — quick aroma oil" },
-        { name: "Scallions, optional nori", amount: "2 tbsp + 1 sheet", reason: "Base — garnish" },
-      ]
-    : [
-        { name: "Primary protein", amount: "140g", reason: "Increase native protein first" },
-        { name: "Main carb base", amount: "100g", reason: "Keep recognizable structure" },
-        { name: "Core sauce/base", amount: "1 portion", reason: "Preserve dish identity" },
-      ];
-
-  const steps = looksBrothy
-    ? [
-        "Simmer stock with a spoon of dried mushrooms or a splash of fish sauce if you have it — optional depth while you prep noodles and protein.",
-        "Whisk tare into hot stock; taste for salt. You want a savory, slightly sweet shoyu profile, not thin salted water.",
-        "Cook noodles to package time, drain, and divide into bowls. Cook chicken separately (sear or simmer) until done; slice.",
-        "Warm oil with garlic/ginger 2–3 minutes, strain — drizzle a little over each bowl for aroma.",
-        "Pour broth over noodles, top with chicken and scallions. Full three-version output will refine protein targets and swaps.",
-      ]
-    : [
-        "Keep the dish structure and flavor base unchanged where possible.",
-        "Increase primary protein first using coherent same-dish moves.",
-        "Apply one low-visibility optimization if needed while preserving texture.",
-      ];
-
-  return {
-    id: "close-match",
-    label: "Close Match",
-    summary: "Fast draft while full optimization runs",
-    macros: { p: 0, d: 0 },
-    totalProteinG: 0,
-    swapSummary: ["Draft preview", "Identity-first protein move"],
-    mealPrepNote: null,
-    proteinMathWarning: null,
-    cookTimeMinutes: 30,
-    difficulty: "Medium",
-    tasteScore: 8,
-    realismScore: 8,
-    aggressivenessScore: 4,
-    why: "Building a quick first-pass close-match while the full three-version result is generated.",
-    adds: [],
-    transformationByComponent: looksBrothy
-      ? {
-          protein: ["More chicken first; egg only if it fits the bowl grammar"],
-          carbBase: ["Keep noodles recognizable; blends come in real tiers"],
-          sauceBroth: ["Tare + stock depth, not salty water"],
-          fat: ["Small aroma oil hit, not a puddle"],
-          toppings: ["Scallions / nori as usual"],
-        }
-      : {
-          protein: ["Grow the anchor protein before powders"],
-          carbBase: ["Hold starch identity"],
-          sauceBroth: [],
-          fat: ["Trim finishing fat only if safe"],
-          toppings: [],
-        },
-    methodAdjustments: steps.slice(0, Math.min(5, steps.length)),
-    ingredients: ingredients.map((ing, i) => ({
-      id: toIngredientId(ing.name, i),
-      original: ing.name,
-      current: ing.name,
-      amount: ing.amount,
-      reason: ing.reason,
-      swapOptions: [
-        {
-          type: "more-authentic",
-          label: "Keep original style",
-          replacement: ing.name,
-          effect: "Preserves dish identity",
-        },
-        {
-          type: "higher-protein",
-          label: "Higher protein variant",
-          replacement: `${ing.name} (higher protein)`,
-          effect: "Increases protein density",
-        },
-      ],
-    })),
-    steps,
-  };
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([p, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
 }
 
-async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
-  return await Promise.race([
-    p,
-    new Promise<null>((resolve) => {
-      setTimeout(() => resolve(null), ms);
-    }),
-  ]);
+function now(): number {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function errorCategory(raw: string): string {
+  const friendly = humanizeGenerateError(raw) ?? raw;
+  if (/connection/i.test(friendly)) return "offline";
+  if (/too many/i.test(friendly)) return "rate_limited";
+  if (/too long/i.test(friendly)) return "timeout";
+  if (/incomplete/i.test(friendly)) return "bad_output";
+  if (/server|hiccup/i.test(friendly)) return "server";
+  return "other";
 }
 
 export default function WiseDishApp() {
-  const showDebugOverlay = process.env.NODE_ENV === "development";
   const [mode, setMode] = useState<ModeId>("wisedish");
   const [addVeggies, setAddVeggies] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const [inputDish, setInputDish] = useState<string>(DEFAULT_DISH);
+  const [inputDish, setInputDish] = useState("");
   const [servings, setServings] = useState<1 | 2 | 4 | 6 | 8>(1);
   const [previewServings, setPreviewServings] = useState<number>(1);
   const [sliders, setSliders] = useState<SliderValues>(DEFAULT_SLIDERS);
-  const [overridesByVersion, setOverridesByVersion] =
-    useState<Record<VersionId, IngredientOverride[]>>(emptyOverrides);
 
   const [response, setResponse] = useState<WiseDishResponse | null>(null);
-  /** During full generate: three slots fill in order (Close Match → Balanced → Full Send). */
-  const [streamingVersions, setStreamingVersions] = useState<
-    [RecipeVersion | null, RecipeVersion | null, RecipeVersion | null] | null
-  >(null);
-  const [resultId, setResultId] = useState<string>(createResultId());
+  /** While generating: slot 0 fills early if the quick Close Match preview lands first. */
+  const [streamingVersions, setStreamingVersions] = useState<StreamingSlots | null>(null);
+  const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
+  const [resultId, setResultId] = useState<string>(createResultId);
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
-  const [importContext, setImportContext] = useState<{
-    source: "youtube" | "tiktok";
-    originalTitle: string;
-    confidence: "high" | "medium" | "low";
-    ingredients: string[];
-    instructions: string[];
-  } | null>(null);
-
-  /** Used only for retry flows that don't already have a response. */
-  const [isInitialLoading, setIsInitialLoading] = useState(false);
+  const [importContext, setImportContext] = useState<ImportContext | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [regeneratingVersionId, setRegeneratingVersionId] = useState<VersionId | null>(null);
-  const [isRefreshingFromCache, setIsRefreshingFromCache] = useState(false);
-  const [fromCache, setFromCache] = useState(false);
-  const [cachedRecipeMeta, setCachedRecipeMeta] = useState<{ id: string; displayName: string; savedServings: number } | null>(
-    null
-  );
-  const [perfSummary, setPerfSummary] = useState<{
-    lastQuickMs?: number;
-    lastFullMs?: number;
-    p50Ms?: number;
-    p95Ms?: number;
-    samples: number;
-  } | null>(null);
+  const [swapNotes, setSwapNotes] = useState<Partial<Record<VersionId, string>>>({});
+  /** Save key (normalized dish name) of the result on screen, so swaps update the same saved recipe. */
+  const [savedDishKey, setSavedDishKey] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [disambiguationOptions, setDisambiguationOptions] = useState<{
     assumed: string | null;
     variants: string[];
   } | null>(null);
+  const [heroExamples] = useState<HeroExample[]>(() =>
+    HERO_EXAMPLES.map(({ dish, emoji, fallbackGainG }) => ({
+      dish,
+      emoji,
+      gainG: bestProteinGain(getBakedExample(dish, "wisedish")) ?? fallbackGainG,
+    }))
+  );
 
-  /** Bumped on mode change so in-flight generates don’t repopulate stale results. */
+  /** Bumped whenever results are replaced, so in-flight requests don't repopulate stale results. */
   const resultsGenerationKey = useRef(0);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
+  const inputCardRef = useRef<HTMLDivElement | null>(null);
 
-  const isBusy = isGenerating || isInitialLoading || regeneratingVersionId !== null || isImporting;
-
-  const recommendedSlidersByMode: Record<ModeId, SliderValues> = {
-    wisedish: DEFAULT_SLIDERS,
-    lean: { tasteIntegrity: 7, proteinBoost: 4, pantryRealism: 7 },
-  };
-
+  const isBusy = isGenerating || regeneratingVersionId !== null || isImporting;
   const thirdVersionLabel = mode === "lean" ? "Fully Light" : "Full Send";
-  const resolvedApiBase =
-    getResolvedApiBase() || (typeof window !== "undefined" ? window.location.origin : "(unknown)");
-  const generateEndpoints =
-    typeof window !== "undefined" ? getApiRequestEndpointCandidates("/api/generate") : [];
-  const importEndpoints =
-    typeof window !== "undefined" ? getApiRequestEndpointCandidates("/api/import") : [];
   const sliderKey = JSON.stringify({
     tasteIntegrity: sliders.tasteIntegrity,
     proteinBoost: sliders.proteinBoost,
     pantryRealism: sliders.pantryRealism,
   });
 
+  const scrollToResults = () => {
+    window.requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  const showResponse = (next: WiseDishResponse, nextNotice: Notice | null) => {
+    resultsGenerationKey.current += 1;
+    setResponse(next);
+    setStreamingVersions(null);
+    setPreviewServings(servings);
+    setResultId(createResultId());
+    setSwapNotes({});
+    setError(null);
+    setImportContext(null);
+    setDisambiguationOptions(null);
+    setNotice(nextNotice);
+  };
+
+  const savedNotice = (saved: SavedRecipe): Notice => ({
+    title: `Showing your saved ${saved.displayName} transformation`,
+    subtitle: saved.servings !== servings ? `Scaled to ${servings} servings` : undefined,
+    actionLabel: "Regenerate ↺",
+    onAction: () => {
+      deleteRecipe(saved.id);
+      void handleGenerateAll({ forceFresh: true, dish: saved.dishName, source: "regenerate" });
+    },
+  });
+
+  const applySavedRecipe = (saved: SavedRecipe) => {
+    setInputDish(saved.displayName);
+    setSavedDishKey(saved.dishName);
+    showResponse(
+      {
+        inputDish: saved.displayName,
+        assumptions: [],
+        versions: saved.versions as [RecipeVersion, RecipeVersion, RecipeVersion],
+        ...(saved.classification ? { classificationFull: saved.classification } : {}),
+      },
+      savedNotice(saved)
+    );
+  };
+
+  // Open a recipe picked on the My recipes page.
   useEffect(() => {
     void (async () => {
       await initRecipeLogNativeStorage();
@@ -309,131 +201,85 @@ export default function WiseDishApp() {
       if (!selectedId) return;
       const selected = getSavedRecipes().find((r) => r.id === selectedId);
       if (!selected) return;
-      setInputDish(selected.displayName);
-      setMode(selected.mode as ModeId);
-      const parsed = JSON.parse(selected.sliderKey ?? "{}") as Partial<SliderValues>;
-      if (
-        typeof parsed.tasteIntegrity === "number" &&
-        typeof parsed.proteinBoost === "number" &&
-        typeof parsed.pantryRealism === "number"
-      ) {
-        setSliders({
-          tasteIntegrity: parsed.tasteIntegrity,
-          proteinBoost: parsed.proteinBoost,
-          pantryRealism: parsed.pantryRealism,
-        });
+      setMode(selected.mode === "lean" ? "lean" : "wisedish");
+      try {
+        const parsed = JSON.parse(selected.sliderKey ?? "{}") as Partial<SliderValues>;
+        if (
+          typeof parsed.tasteIntegrity === "number" &&
+          typeof parsed.proteinBoost === "number" &&
+          typeof parsed.pantryRealism === "number"
+        ) {
+          setSliders({
+            tasteIntegrity: parsed.tasteIntegrity,
+            proteinBoost: parsed.proteinBoost,
+            pantryRealism: parsed.pantryRealism,
+          });
+        }
+      } catch {
+        /* keep current sliders */
       }
-      setResponse({
-        inputDish: selected.displayName,
-        assumptions: [],
-        versions: selected.versions as [RecipeVersion, RecipeVersion, RecipeVersion],
-      });
-      setPreviewServings(servings);
-      setFromCache(true);
-      setCachedRecipeMeta({ id: selected.id, displayName: selected.displayName, savedServings: selected.servings });
+      applySavedRecipe(selected);
+      track("saved_recipe_opened", { dish: selected.dishName });
     })();
-  }, [servings]);
+    // Runs once on mount; applySavedRecipe only reads stable setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onChangeSlider = <K extends keyof SliderValues>(key: K, value: number) => {
     setSliders((prev) => ({ ...prev, [key]: value }));
   };
 
-  const applySavedRecipeToView = (saved: SavedRecipe, targetDish?: string) => {
-    setResponse({
-      inputDish: saved.displayName,
-      assumptions: [],
-      versions: saved.versions as [RecipeVersion, RecipeVersion, RecipeVersion],
-    });
-    setPreviewServings(servings);
-    setFromCache(true);
-    setCachedRecipeMeta({ id: saved.id, displayName: saved.displayName, savedServings: saved.servings });
-    setError(null);
-    setImportContext(null);
-    setStreamingVersions(null);
-    if (targetDish) setInputDish(targetDish);
-  };
-
-  const recordPerf = (sample: PerfSample) => {
-    const samples = [...readPerfSamples(), sample].slice(-MAX_PERF_SAMPLES);
-    writePerfSamples(samples);
-    const fullValues = samples
-      .map((s) => s.fullMs)
-      .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
-    setPerfSummary({
-      lastQuickMs: sample.quickMs,
-      lastFullMs: sample.fullMs,
-      p50Ms: fullValues.length ? percentile(fullValues, 50) : undefined,
-      p95Ms: fullValues.length ? percentile(fullValues, 95) : undefined,
-      samples: fullValues.length,
-    });
-  };
-
-  useEffect(() => {
-    const samples = readPerfSamples();
-    const fullValues = samples
-      .map((s) => s.fullMs)
-      .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
-    if (fullValues.length === 0) return;
-    const last = samples[samples.length - 1];
-    setPerfSummary({
-      lastQuickMs: last?.quickMs,
-      lastFullMs: last?.fullMs,
-      p50Ms: percentile(fullValues, 50),
-      p95Ms: percentile(fullValues, 95),
-      samples: fullValues.length,
-    });
-  }, []);
-
-  const handleGenerateAll = async (forceFresh: boolean = false, dishOverride?: string) => {
-    const perfStart = typeof performance !== "undefined" ? performance.now() : Date.now();
-    let quickElapsedMs: number | undefined;
-    const dishInputStart = dishOverride ?? inputDish;
-    const normalised = dishInputStart.trim().toLowerCase();
+  async function handleGenerateAll(opts: { forceFresh?: boolean; dish?: string; source?: GenerateSource } = {}) {
+    const source = opts.source ?? "typed";
+    const dishInputStart = (opts.dish ?? inputDish).trim();
+    if (!dishInputStart) {
+      setError("Enter a dish name first.");
+      return;
+    }
+    const normalised = dishInputStart.toLowerCase();
     setDisambiguationOptions(null);
-    if (!forceFresh && !isUrl(dishInputStart) && normalised && !dishOverride) {
-      const existing =
-        getSavedRecipe(normalised, mode, sliderKey) ?? getLatestSavedRecipeByDishMode(normalised, mode);
+
+    if (!opts.forceFresh && !isUrl(dishInputStart)) {
+      const existing = getSavedRecipe(normalised, mode, sliderKey) ?? getLatestSavedRecipeByDishMode(normalised, mode);
       if (existing) {
-        applySavedRecipeToView(existing, normalised);
-        recordPerf({ at: Date.now(), dish: normalised, cacheHit: true });
+        applySavedRecipe(existing);
+        track("saved_recipe_opened", { dish: normalised });
+        scrollToResults();
         return;
       }
     }
-    setFromCache(false);
-    setCachedRecipeMeta(null);
+
     resultsGenerationKey.current += 1;
     const genKey = resultsGenerationKey.current;
+    const isCurrent = () => genKey === resultsGenerationKey.current;
+    const startedAt = now();
+
+    setNotice(null);
     setIsGenerating(true);
+    setGenerationStartedAt(Date.now());
     setIsImporting(false);
     setError(null);
     setResponse(null);
-    setStreamingVersions([buildFastCloseMatchDraft(dishInputStart), null, null]);
+    setStreamingVersions([null, null, null]);
     setResultId(createResultId());
-    setOverridesByVersion(emptyOverrides());
+    setSwapNotes({});
+    scrollToResults();
+    track("generate_started", { dish: normalised.slice(0, 60), mode, source });
+
     let dishForGenerate = dishInputStart;
-    const savedForClassification =
-      !isUrl(dishInputStart) && normalised
-        ? getLatestSavedRecipeByDishMode(normalised, mode)
-        : null;
-    const cachedClassification = savedForClassification?.classification;
-    let importedRecipe:
-      | {
-          ingredients: string[];
-          instructions: string[];
-          source: "youtube" | "tiktok";
-          originalTitle: string;
-          confidence: "high" | "medium" | "low";
-        }
-      | undefined;
+    const savedForClassification = !isUrl(dishInputStart) ? getLatestSavedRecipeByDishMode(normalised, mode) : null;
+    let importedRecipe: GenerateApiRequestBody["importedRecipe"];
 
     if (isUrl(dishInputStart)) {
       setIsImporting(true);
       const importRes = await importRecipeFromUrl(dishInputStart);
+      if (!isCurrent()) return;
       setIsImporting(false);
       if (!importRes.ok) {
         setStreamingVersions(null);
         setError(importRes.error);
         setIsGenerating(false);
+        track("generate_failed", { reason: "import", mode });
         return;
       }
       if (!importRes.data.foundRecipe) {
@@ -447,6 +293,7 @@ export default function WiseDishApp() {
           instructions: [],
         });
         setIsGenerating(false);
+        track("generate_failed", { reason: "import_no_recipe", mode });
         return;
       }
       dishForGenerate = importRes.data.dishName;
@@ -458,144 +305,114 @@ export default function WiseDishApp() {
         confidence: importRes.data.confidence,
       };
       setInputDish(importRes.data.dishName);
-      setImportContext(importedRecipe);
+      setImportContext({
+        source: importRes.data.source,
+        originalTitle: importRes.data.originalTitle,
+        confidence: importRes.data.confidence,
+        ingredients: importRes.data.ingredients,
+        instructions: importRes.data.instructions,
+      });
     } else {
       setImportContext(null);
     }
-    const quickStart = typeof performance !== "undefined" ? performance.now() : Date.now();
-    const quickClose = await withTimeout(
-      generateQuickCloseMatch({
-        dish: dishForGenerate,
-        servings,
-        sliders,
-        overridesByVersion: toApiOverrides(emptyOverrides()),
-        transformationMode: mode,
-        addVeggies,
-        importedRecipe,
-        cachedClassification,
-      }),
-      12_000
-    );
-    if (quickClose && "needsDisambiguation" in quickClose) {
-      setStreamingVersions(null);
-      setDisambiguationOptions({
-        assumed: quickClose.assumedVariant,
-        variants: quickClose.possibleVariants,
-      });
-      setIsGenerating(false);
-      return;
-    }
-    if (quickClose && quickClose.ok) {
-      const quickDone = typeof performance !== "undefined" ? performance.now() : Date.now();
-      quickElapsedMs = Math.max(0, quickDone - quickStart);
-      setStreamingVersions((prev) => {
-        const base: [RecipeVersion | null, RecipeVersion | null, RecipeVersion | null] = prev ?? [null, null, null];
-        return [quickClose.version, base[1], base[2]];
-      });
-      setPerfSummary((prev) => ({
-        ...(prev ?? { samples: 0 }),
-        lastQuickMs: quickElapsedMs,
-      }));
-    }
 
-    const r = await streamGenerateFull(
-      {
-        dish: dishForGenerate,
-        servings,
-        sliders,
-        overridesByVersion: toApiOverrides(emptyOverrides()),
-        transformationMode: mode,
-        addVeggies,
-        importedRecipe,
-        cachedClassification,
-      },
-      {
-        onVersion: (index, version) => {
-          setStreamingVersions((prev) => {
-            const base: [RecipeVersion | null, RecipeVersion | null, RecipeVersion | null] = prev ?? [
-              null,
-              null,
-              null,
-            ];
-            const next: typeof base = [...base];
-            if (index >= 0 && index < 3) next[index] = version;
-            return next;
-          });
-        },
+    const requestBody: GenerateApiRequestBody = {
+      dish: dishForGenerate,
+      servings,
+      sliders,
+      overridesByVersion: {},
+      transformationMode: mode,
+      addVeggies,
+      importedRecipe,
+      cachedClassification: savedForClassification?.classification,
+    };
+
+    // Quick Close Match preview and the full three-version run start together; whichever is
+    // useful first is shown. (Previously the full run waited for the preview.)
+    let fullDone = false;
+    void withTimeout(generateQuickCloseMatch(requestBody), QUICK_PREVIEW_TIMEOUT_MS).then((quick) => {
+      if (!quick || fullDone || !isCurrent()) return;
+      if ("needsDisambiguation" in quick) return; // the full request reports this too
+      if (quick.ok) {
+        setStreamingVersions((prev) => (prev ? [quick.version, prev[1], prev[2]] : prev));
+        track("generate_quick_ready", { ms: Math.round(now() - startedAt) });
       }
-    );
+    });
+
+    const r = await streamGenerateFull(requestBody, {
+      onVersion: (index, version) => {
+        if (!isCurrent()) return;
+        setStreamingVersions((prev) => {
+          const base: StreamingSlots = prev ?? [null, null, null];
+          const next: StreamingSlots = [...base];
+          if (index >= 0 && index < 3) next[index] = version;
+          return next;
+        });
+      },
+    });
+    fullDone = true;
+    if (!isCurrent()) return;
+
     setPreviewServings(servings);
     setStreamingVersions(null);
-    if (genKey !== resultsGenerationKey.current) {
-      setIsGenerating(false);
-      return;
-    }
+    setIsGenerating(false);
+    setGenerationStartedAt(null);
+
     if ("needsDisambiguation" in r) {
-      setDisambiguationOptions({
-        assumed: r.assumedVariant,
-        variants: r.possibleVariants,
-      });
-      setIsGenerating(false);
+      setDisambiguationOptions({ assumed: r.assumedVariant, variants: r.possibleVariants });
+      inputCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     if ("ok" in r && r.ok) {
       setResponse(r.data);
-      const now = Date.now();
-      const source: SavedRecipe["source"] = importedRecipe?.source ?? "typed";
+      const savedAt = Date.now();
       const dishNormalized = dishForGenerate.trim().toLowerCase();
+      setSavedDishKey(dishNormalized);
       saveRecipe({
-        id: `${dishNormalized}_${mode}_${now}`,
+        id: `${dishNormalized}_${mode}_${savedAt}`,
         dishName: dishNormalized,
         displayName: r.data.inputDish || dishForGenerate,
         mode,
         servings,
-        savedAt: now,
+        savedAt,
         versions: r.data.versions,
         tagline: "Three versions. Pick your trade-off.",
-        source,
+        source: importedRecipe?.source ?? "typed",
         sliderKey,
         classification: r.data.classificationFull,
       });
-      const perfDone = typeof performance !== "undefined" ? performance.now() : Date.now();
-      recordPerf({
-        at: Date.now(),
-        dish: dishForGenerate.trim().toLowerCase(),
-        cacheHit: false,
-        quickMs: quickElapsedMs,
-        fullMs: Math.max(0, perfDone - perfStart),
-      });
+      track("generate_succeeded", { ms: Math.round(now() - startedAt), dish: dishNormalized.slice(0, 60), mode });
     } else if ("error" in r) {
       setError(r.error);
+      track("generate_failed", { reason: errorCategory(r.error), mode });
     }
-    setIsGenerating(false);
-  };
+  }
 
   const handleSwapIngredient = async (
     versionId: VersionId,
     ingredientId: string,
-    replacement: string
+    request: { intent: SwapIntent; replacement?: string }
   ) => {
     if (!response) return;
-    const filtered = overridesByVersion[versionId].filter((o) => o.ingredientId !== ingredientId);
-    const nextForVersion = [...filtered, { ingredientId, forceReplacement: replacement }];
-    const nextMap: Record<VersionId, IngredientOverride[]> = {
-      ...overridesByVersion,
-      [versionId]: nextForVersion,
-    };
-    setOverridesByVersion(nextMap);
+    const index = response.versions.findIndex((v) => v.id === versionId);
+    const version = response.versions[index];
+    const ingredient = version?.ingredients.find((i) => i.id === ingredientId);
+    if (!version || !ingredient || index < 0) return;
 
+    const genKey = resultsGenerationKey.current;
     setRegeneratingVersionId(versionId);
     setError(null);
-    const genKey = resultsGenerationKey.current;
-    const r = await postGenerate({
-      dish: inputDish,
-      servings,
-      sliders,
-      targetVersion: versionId,
-      previousResponse: response,
-      overridesByVersion: toApiOverrides(nextMap),
+    track("swap_requested", { intent: request.intent, tier: versionId });
+
+    const r = await postSwap({
+      dish: response.inputDish || inputDish,
       transformationMode: mode,
-      addVeggies,
+      servings,
+      versionIndex: index as 0 | 1 | 2,
+      version,
+      ingredient: { name: ingredient.current, amount: ingredient.amount },
+      intent: request.intent,
+      replacement: request.replacement,
       importedRecipe: importContext
         ? {
             ingredients: importContext.ingredients,
@@ -605,224 +422,162 @@ export default function WiseDishApp() {
             confidence: importContext.confidence,
           }
         : undefined,
+      cachedClassification: response.classificationFull,
     });
-    if (genKey === resultsGenerationKey.current) {
-      if ("ok" in r && r.ok) {
-        setResponse(r.data);
-        setPreviewServings(servings);
-        setResultId(createResultId());
-        const now = Date.now();
-        saveRecipe({
-          id: `${inputDish.trim().toLowerCase()}_${mode}_${now}`,
-          dishName: inputDish.trim().toLowerCase(),
-          displayName: r.data.inputDish || inputDish,
-          mode,
-          servings,
-          savedAt: now,
-          versions: r.data.versions,
-          tagline: "Three versions. Pick your trade-off.",
-          source: importContext?.source ?? "typed",
-          sliderKey,
-        });
-      } else if ("error" in r) {
-        setError(r.error);
-      }
+
+    if (genKey !== resultsGenerationKey.current) {
+      setRegeneratingVersionId(null);
+      return;
+    }
+    if (r.ok) {
+      const versions = [...response.versions] as WiseDishResponse["versions"];
+      versions[index] = { ...r.version, label: version.label };
+      const next: WiseDishResponse = { ...response, versions };
+      setResponse(next);
+      setSwapNotes((prev) => ({ ...prev, [versionId]: r.swapNote || "Swapped." }));
+      const dishNormalized = savedDishKey || (response.inputDish || inputDish).trim().toLowerCase();
+      saveRecipe({
+        id: `${dishNormalized}_${mode}_${Date.now()}`,
+        dishName: dishNormalized,
+        displayName: response.inputDish || inputDish,
+        mode,
+        servings,
+        savedAt: Date.now(),
+        versions,
+        tagline: "Three versions. Pick your trade-off.",
+        source: importContext?.source ?? "typed",
+        sliderKey,
+        classification: response.classificationFull,
+      });
+      track("swap_succeeded", { intent: request.intent, tier: versionId });
+    } else {
+      setError(r.error);
+      track("swap_failed", { intent: request.intent, reason: errorCategory(r.error) });
     }
     setRegeneratingVersionId(null);
   };
 
-  const onPickExample = (dish: string) => {
+  /** Example chips and hero chips: instant baked result if we have one, otherwise generate right away. */
+  const openExample = (dish: string) => {
     const normalizedDish = dish.toLowerCase();
+    setInputDish(normalizedDish);
     const saved = getLatestSavedRecipeByDishMode(normalizedDish, mode);
     if (saved) {
-      // Keep current fine-tune sliders untouched; only swap visible recipe result.
-      applySavedRecipeToView(saved, normalizedDish);
+      applySavedRecipe(saved);
+      track("example_opened", { dish: normalizedDish, instant: "saved" });
+      scrollToResults();
       return;
     }
-    setInputDish(normalizedDish);
+    const baked = getBakedExample(dish, mode);
+    if (baked) {
+      setSavedDishKey(normalizedDish);
+      showResponse(baked, {
+        title: `Example: ${dish}`,
+        subtitle: "Pre-made so you can see it instantly. Make your own for fresh ideas and swaps.",
+        actionLabel: "Make a fresh one ↺",
+        onAction: () => void handleGenerateAll({ forceFresh: true, dish: normalizedDish, source: "regenerate" }),
+      });
+      track("example_opened", { dish: normalizedDish, instant: "baked" });
+      scrollToResults();
+      return;
+    }
+    track("example_opened", { dish: normalizedDish, instant: "none" });
+    void handleGenerateAll({ dish: normalizedDish, source: "example" });
   };
 
-  const handleRetryAfterError = async () => {
-    setError(null);
-    if (!response) {
-      resultsGenerationKey.current += 1;
-      const genKey = resultsGenerationKey.current;
-      setIsInitialLoading(true);
-      setStreamingVersions([buildFastCloseMatchDraft(inputDish), null, null]);
-      setResultId(createResultId());
-      const r = await streamGenerateFull(
-        {
-          dish: inputDish,
-          servings,
-          sliders,
-          overridesByVersion: toApiOverrides(emptyOverrides()),
-          transformationMode: mode,
-          addVeggies,
-          importedRecipe: importContext
-            ? {
-                ingredients: importContext.ingredients,
-                instructions: importContext.instructions,
-                source: importContext.source,
-                originalTitle: importContext.originalTitle,
-                confidence: importContext.confidence,
-              }
-            : undefined,
-        },
-        {
-          onVersion: (index, version) => {
-            setStreamingVersions((prev) => {
-              const base: [RecipeVersion | null, RecipeVersion | null, RecipeVersion | null] = prev ?? [
-                null,
-                null,
-                null,
-              ];
-              const next: typeof base = [...base];
-              if (index >= 0 && index < 3) next[index] = version;
-              return next;
-            });
-          },
-        }
-      );
-      setPreviewServings(servings);
-      setStreamingVersions(null);
-      if (genKey === resultsGenerationKey.current) {
-        if ("needsDisambiguation" in r) {
-          setDisambiguationOptions({
-            assumed: r.assumedVariant,
-            variants: r.possibleVariants,
-          });
-        } else if ("ok" in r && r.ok) {
-          setResponse(r.data);
-        } else if ("error" in r) {
-          setError(r.error);
-        }
-      }
-      setIsInitialLoading(false);
+  const onChangeMode = (next: ModeId) => {
+    if (next === mode) return;
+    const hasResults = Boolean(response || streamingVersions?.some(Boolean));
+    if (hasResults && !window.confirm("Switching mode clears your current results. Continue?")) {
       return;
     }
-    await handleGenerateAll();
+    resultsGenerationKey.current += 1;
+    setMode(next);
+    setSliders(RECOMMENDED_SLIDERS[next]);
+    setShowAdvanced(false);
+    setResponse(null);
+    setStreamingVersions(null);
+    setError(null);
+    setImportContext(null);
+    setRegeneratingVersionId(null);
+    setIsGenerating(false);
+    setGenerationStartedAt(null);
+    setNotice(null);
+    setSwapNotes({});
   };
 
   return (
     <div className="flex flex-col">
       <OfflineBanner />
-      <HeroSection />
-      <InputLab
-        inputDish={inputDish}
-        sliders={sliders}
-        onChangeDish={setInputDish}
-        onChangeSlider={onChangeSlider}
-        mode={mode}
-        onChangeMode={(next) => {
-          if (next === mode) return;
-          const hasResults = Boolean(response || streamingVersions?.some(Boolean));
-          if (
-            hasResults &&
-            !window.confirm("Switching mode clears your current results. Continue?")
-          ) {
-            return;
-          }
-          resultsGenerationKey.current += 1;
-          setMode(next);
-          setSliders(recommendedSlidersByMode[next]);
-          setOverridesByVersion(emptyOverrides());
-          setShowAdvanced(false);
-          setResponse(null);
-          setStreamingVersions(null);
-          setError(null);
-          setImportContext(null);
-          setRegeneratingVersionId(null);
-          setIsGenerating(false);
-          setIsInitialLoading(false);
-          setFromCache(false);
-          setCachedRecipeMeta(null);
-        }}
-        addVeggies={addVeggies}
-        onAddVeggiesChange={setAddVeggies}
-        servings={servings}
-        onChangeServings={setServings}
-        thirdVersionLabel={thirdVersionLabel}
-        showAdvanced={showAdvanced}
-        onToggleAdvanced={() => setShowAdvanced((v) => !v)}
-        onGenerate={() => void handleGenerateAll()}
-        chips={EXAMPLE_CHIPS}
-        onPickExample={onPickExample}
-        isGenerating={isGenerating}
-        isImporting={isImporting}
-        disabled={isBusy}
-        disambiguationOptions={disambiguationOptions}
-        onPickDisambiguationVariant={(variant) => {
-          setInputDish(variant);
-          void handleGenerateAll(true, variant);
-        }}
-        onDisambiguationOther={() => {
-          setDisambiguationOptions(null);
-          setError(null);
-        }}
-      />
+      <HeroSection examples={heroExamples} onTryExample={openExample} disabled={isBusy} />
+      <div ref={inputCardRef}>
+        <InputLab
+          inputDish={inputDish}
+          sliders={sliders}
+          onChangeDish={setInputDish}
+          onChangeSlider={onChangeSlider}
+          mode={mode}
+          onChangeMode={onChangeMode}
+          addVeggies={addVeggies}
+          onAddVeggiesChange={setAddVeggies}
+          servings={servings}
+          onChangeServings={setServings}
+          thirdVersionLabel={thirdVersionLabel}
+          showAdvanced={showAdvanced}
+          onToggleAdvanced={() => setShowAdvanced((v) => !v)}
+          onGenerate={() => void handleGenerateAll()}
+          chips={EXAMPLE_CHIPS}
+          onPickExample={openExample}
+          isGenerating={isGenerating}
+          isImporting={isImporting}
+          disabled={isBusy}
+          disambiguationOptions={disambiguationOptions}
+          onPickDisambiguationVariant={(variant) => {
+            setInputDish(variant);
+            void handleGenerateAll({ forceFresh: true, dish: variant, source: "disambiguation" });
+          }}
+          onDisambiguationOther={() => {
+            setDisambiguationOptions(null);
+            setError(null);
+          }}
+        />
+      </div>
 
-      <div className="mt-2">
-        {showDebugOverlay && (error || perfSummary) ? (
-          <div className="mx-auto mb-2 w-full max-w-3xl px-4 text-[11px] text-[color:var(--text-muted)]">
-            Debug: base={resolvedApiBase} | generate→{generateEndpoints.join(" → ") || GENERATE_ENDPOINT} |
-            import→{importEndpoints.join(" → ") || IMPORT_ENDPOINT}
-            {perfSummary
-              ? ` | perf lastQuick=${perfSummary.lastQuickMs ? `${(perfSummary.lastQuickMs / 1000).toFixed(1)}s` : "n/a"} lastFull=${perfSummary.lastFullMs ? `${(perfSummary.lastFullMs / 1000).toFixed(1)}s` : "n/a"} p50=${perfSummary.p50Ms ? `${(perfSummary.p50Ms / 1000).toFixed(1)}s` : "n/a"} p95=${perfSummary.p95Ms ? `${(perfSummary.p95Ms / 1000).toFixed(1)}s` : "n/a"} n=${perfSummary.samples}`
-              : ""}
-          </div>
-        ) : null}
+      <div ref={resultsRef} className="mt-2 scroll-mt-20">
         <ResultsPreview
           response={response}
           classification={response?.classification ?? null}
-          onRetryWrongDish={() => {
-            setResponse(null);
-            setStreamingVersions(null);
-            setError(null);
-            void handleGenerateAll(true);
-          }}
+          onRetryWrongDish={() => void handleGenerateAll({ forceFresh: true, source: "regenerate" })}
           streamingVersions={streamingVersions}
+          generationStartedAt={generationStartedAt}
+          isImporting={isImporting}
           resultId={resultId}
-          dish={inputDish}
+          dish={response?.inputDish || inputDish}
           transformationMode={mode}
           servings={servings}
           previewServings={previewServings}
           onChangePreviewServings={setPreviewServings}
           error={error}
           importAttribution={
-            importContext
-              ? {
-                  source: importContext.source,
-                  originalTitle: importContext.originalTitle,
-                }
-              : null
+            importContext ? { source: importContext.source, originalTitle: importContext.originalTitle } : null
           }
           showLowConfidenceImportNotice={importContext?.source === "tiktok" && importContext.confidence === "low"}
-          isInitialLoading={isInitialLoading}
           isGenerating={isGenerating}
           regeneratingVersionId={regeneratingVersionId}
-          onSwapIngredient={handleSwapIngredient}
+          swapNotes={swapNotes}
+          onSwapIngredient={(versionId, ingredientId, request) =>
+            void handleSwapIngredient(versionId, ingredientId, request)
+          }
           cacheNotice={
-            fromCache && cachedRecipeMeta
+            notice
               ? {
-                  title: `Showing your saved ${cachedRecipeMeta.displayName} transformation`,
-                  subtitle:
-                    cachedRecipeMeta.savedServings !== servings
-                      ? `Showing saved transformation scaled to ${servings} servings`
-                      : undefined,
-                  actionLabel: "Regenerate ↺",
-                  actionDisabled: isRefreshingFromCache || isGenerating || isInitialLoading,
-                  onAction: () => {
-                    setIsRefreshingFromCache(true);
-                    deleteRecipe(cachedRecipeMeta.id);
-                    setFromCache(false);
-                    setCachedRecipeMeta(null);
-                    void handleGenerateAll(true).finally(() => setIsRefreshingFromCache(false));
-                  },
+                  ...notice,
+                  actionDisabled: isBusy,
                 }
               : null
           }
-          onRegenerateAll={() => void handleGenerateAll(true)}
-          onRetry={handleRetryAfterError}
+          onRegenerateAll={() => void handleGenerateAll({ forceFresh: true, source: "regenerate" })}
+          onRetry={() => void handleGenerateAll({ forceFresh: true, source: "retry" })}
         />
       </div>
 

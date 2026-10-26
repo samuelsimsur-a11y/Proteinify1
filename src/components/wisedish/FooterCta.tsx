@@ -12,7 +12,7 @@ export default function FooterCta() {
           No account required. High-protein recipes you generate and save in My recipes stay on this
           device (browser or app). We do not use them to build a profile on our servers.
         </div>
-        <a href={privacyHref} className="text-xs font-semibold text-[color:var(--accent)]">
+        <a href={privacyHref} className="text-xs font-semibold text-[color:var(--accent-strong)]">
           Privacy policy
         </a>
       </div>

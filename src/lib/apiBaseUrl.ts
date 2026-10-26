@@ -131,7 +131,9 @@ export function isLikelyOffline(): boolean {
  * Vercel preview hostnames (`*.vercel.app` except production) also try production Wise Dish so
  * static or misconfigured previews still work when APIs exist on production.
  */
-export function getApiRequestEndpointCandidates(apiPath: "/api/generate" | "/api/import"): string[] {
+export function getApiRequestEndpointCandidates(
+  apiPath: "/api/generate" | "/api/import" | "/api/feedback"
+): string[] {
   if (!apiPath.startsWith("/")) {
     return [apiPath];
   }

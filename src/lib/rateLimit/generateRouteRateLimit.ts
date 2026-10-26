@@ -38,12 +38,16 @@ export function getClientIp(req: NextRequest): string {
 }
 
 const THREE_MIN_WINDOW_MS = 3 * 60_000;
-const MAX_PER_THREE_MIN = 10;
-const MAX_PER_DAY = 30;
+/** Each generation sends a quick preview + a full request, so this allows ~8 generations or swaps per window. */
+const MAX_PER_THREE_MIN = 16;
+/** Full generations and swaps per IP per day (quick previews don't count). */
+const MAX_PER_DAY = 40;
 
 export function checkGenerateRateLimit(
-  ip: string
+  ip: string,
+  opts: { countTowardDaily?: boolean } = {}
 ): { ok: true } | { ok: false; reason: "three-minute" | "daily" } {
+  const countTowardDaily = opts.countTowardDaily ?? true;
   const now = Date.now();
   const shortStore = getShortStore();
   const dailyStore = getDailyStore();
@@ -62,12 +66,12 @@ export function checkGenerateRateLimit(
 
   const currentDaily = dailyStore.get(ip);
   if (!currentDaily || currentDaily.date !== today) {
-    dailyStore.set(ip, { count: 1, date: today });
+    dailyStore.set(ip, { count: countTowardDaily ? 1 : 0, date: today });
   } else {
     if (currentDaily.count >= MAX_PER_DAY) {
       return { ok: false, reason: "daily" };
     }
-    currentDaily.count += 1;
+    if (countTowardDaily) currentDaily.count += 1;
     dailyStore.set(ip, currentDaily);
   }
 

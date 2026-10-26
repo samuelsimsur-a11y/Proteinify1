@@ -149,9 +149,14 @@ export function validateSwap(
 
     // ── Physics override (may escalate severity) ──────────────────────────────
     const physicsSeverity = checkPhysicsViolations(dish, guard, swap.quantity);
-    const effectiveSeverity = physicsSeverity
-      ? (physicsSeverity === "blocker" ? "blocker" : resolveEffectiveSeverity(guard, swap.quantity))
-      : resolveEffectiveSeverity(guard, swap.quantity);
+    const quantitySeverity = resolveEffectiveSeverity(guard, swap.quantity);
+    // A physics warning is a floor: a trace amount can't downgrade it to a mere suggestion.
+    const effectiveSeverity =
+      physicsSeverity === "blocker"
+        ? "blocker"
+        : physicsSeverity === "warning" && quantitySeverity === "suggestion"
+          ? "warning"
+          : quantitySeverity;
 
     const goalAlternatives = getGoalAlternatives(guard, userGoal);
 

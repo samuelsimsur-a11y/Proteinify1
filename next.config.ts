@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
-import { API_CORS_HEADERS } from "./src/lib/http/cors";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * Static HTML export (writes `out/`) — no `/api/*` routes. Use only for Capacitor `webDir` sync
@@ -21,11 +22,15 @@ if (staticExport && onVercel) {
 const WISEDISH_BUILD_ID =
   process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || "local";
 
+/** Shown in feedback context so we know which app build a tester was on. */
+const WISEDISH_APP_VERSION: string = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf8")).version;
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   ...(staticExport ? { output: "export" as const } : {}),
   env: {
     NEXT_PUBLIC_WISEDISH_BUILD_ID: WISEDISH_BUILD_ID,
+    NEXT_PUBLIC_WISEDISH_APP_VERSION: WISEDISH_APP_VERSION,
   },
   turbopack: {
     root: __dirname,
@@ -33,10 +38,6 @@ const nextConfig: NextConfig = {
   async headers() {
     if (staticExport) return [];
     return [
-      {
-        source: "/api/:path*",
-        headers: Object.entries(API_CORS_HEADERS).map(([key, value]) => ({ key, value })),
-      },
       {
         source: "/",
         headers: [{ key: "Cache-Control", value: "private, no-cache, must-revalidate" }],

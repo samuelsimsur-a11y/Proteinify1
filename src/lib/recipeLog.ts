@@ -8,7 +8,8 @@ export interface SavedRecipe {
   mode: string;
   servings: number;
   savedAt: number;
-  versions: any[];
+  /** Stored RecipeVersion objects (kept loose so older saves still load). */
+  versions: Array<Record<string, unknown> & { macros?: { p?: number; d?: number } }>;
   tagline: string;
   source?: "typed" | "youtube" | "tiktok" | "text";
   sliderKey?: string;

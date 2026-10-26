@@ -1,8 +1,9 @@
 export function isTikTokUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    const host = u.hostname.replace(/^www\./, "").toLowerCase();
-    return host.includes("tiktok.com");
+    const host = u.hostname.toLowerCase();
+    // Exact domain or a real subdomain — "tiktok.com.evil.site" must not pass, since we fetch the URL server-side.
+    return (u.protocol === "https:" || u.protocol === "http:") && (host === "tiktok.com" || host.endsWith(".tiktok.com"));
   } catch {
     return false;
   }
@@ -15,10 +16,12 @@ export async function fetchTikTokCaption(url: string): Promise<{
 } | null> {
   try {
     // Resolve vm.tiktok short links to canonical /@user/video/... URLs first.
+    if (!isTikTokUrl(url)) return null;
     let resolvedUrl = url;
     try {
       const head = await fetch(url, { method: "HEAD", redirect: "follow", cache: "no-store" });
-      if (head.url) resolvedUrl = head.url;
+      // Only trust the redirect target if it is still TikTok.
+      if (head.url && isTikTokUrl(head.url)) resolvedUrl = head.url;
     } catch {
       /* keep original URL */
     }

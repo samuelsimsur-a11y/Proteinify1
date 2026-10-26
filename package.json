@@ -1,7 +1,7 @@
 {
   "name": "wisedish",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.3",
   "scripts": {
     "dev": "next dev --webpack --port 3000",
     "dev:auto": "PORT=${PORT:-3000}; while lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; do PORT=$((PORT+1)); done; echo \"Starting dev server on port $PORT\"; next dev --webpack --port $PORT",
@@ -24,29 +24,34 @@
     "android:bundle-release": "npm run build:android && cd android && ./gradlew bundleRelease",
     "start": "next start",
     "start:local": "next start --port 3000",
-    "lint": "next lint"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "bake:examples": "node scripts/bake-examples.mjs"
   },
   "dependencies": {
-    "@capacitor/android": "^8.3.1",
-    "@capacitor/cli": "^8.3.1",
-    "@capacitor/core": "^8.3.1",
+    "@capacitor/android": "8.5.3",
+    "@capacitor/cli": "8.5.3",
+    "@capacitor/core": "8.5.3",
     "@capacitor/preferences": "^8.0.1",
+    "@capacitor/share": "8.0.3",
     "@tailwindcss/postcss": "^4.2.2",
-    "next": "latest",
+    "next": "16.4.3",
     "openai": "^4.77.0",
-    "react": "latest",
-    "react-dom": "latest",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "eslint": "latest",
-    "eslint-config-next": "latest",
-    "postcss": "latest",
+    "@types/node": "25.5.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.4.3",
+    "postcss": "8.5.31",
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
-    "typescript": "latest"
+    "typescript": "6.0.2",
+    "vitest": "3.2.7"
   }
 }

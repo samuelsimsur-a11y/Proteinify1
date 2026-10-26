@@ -5,7 +5,7 @@ import { getClientIp } from "@/lib/rateLimit/generateRouteRateLimit";
 import { checkImportRateLimit } from "@/lib/rateLimit/importRouteRateLimit";
 import { extractYouTubeVideoId, fetchYouTubeDescription } from "@/lib/import/youtube";
 import { fetchTikTokCaption, isTikTokUrl } from "@/lib/import/tiktok";
-import { API_CORS_HEADERS, withCorsHeaders } from "@/lib/http/cors";
+import { originOf, withCorsHeaders } from "@/lib/http/cors";
 
 type Confidence = "high" | "medium" | "low";
 type Source = "youtube" | "tiktok";
@@ -17,17 +17,17 @@ function requestIdFrom(req: NextRequest): string {
   return req.headers.get("x-request-id")?.trim() || crypto.randomUUID();
 }
 
-function jsonResponse(body: unknown, requestId: string, init?: ResponseInit): NextResponse {
+function jsonResponse(req: Request, body: unknown, requestId: string, init?: ResponseInit): NextResponse {
   return NextResponse.json(body, {
     ...init,
-    headers: withCorsHeaders({ "X-Request-Id": requestId, ...(init?.headers ?? {}) }),
+    headers: withCorsHeaders(originOf(req), { "X-Request-Id": requestId, ...(init?.headers ?? {}) }),
   });
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(req: Request) {
   return new NextResponse(null, {
     status: 204,
-    headers: API_CORS_HEADERS,
+    headers: withCorsHeaders(originOf(req)),
   });
 }
 
@@ -245,8 +245,7 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
   const limited = checkImportRateLimit(ip);
   if (!limited.ok) {
-    return jsonResponse(
-      { error: "Too many requests — try again in a few minutes.", code: "RATE_LIMITED" },
+    return jsonResponse(req, { error: "Too many requests — try again in a few minutes.", code: "RATE_LIMITED" },
       requestId,
       { status: 429 }
     );
@@ -257,14 +256,14 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as { url?: unknown };
     const url = typeof body.url === "string" ? body.url.trim() : "";
     if (!url) {
-      return jsonResponse({ error: "Missing URL.", code: "INVALID_REQUEST" }, requestId, { status: 400 });
+      return jsonResponse(req, { error: "Missing URL.", code: "INVALID_REQUEST" }, requestId, { status: 400 });
     }
 
     const ytId = extractYouTubeVideoId(url);
     if (ytId) {
       const yt = await fetchYouTubeDescription(ytId);
       if (!yt) {
-        return jsonResponse({ error: "YouTube video not found.", code: "NOT_FOUND" }, requestId, { status: 404 });
+        return jsonResponse(req, { error: "YouTube video not found.", code: "NOT_FOUND" }, requestId, { status: 404 });
       }
 
       const prompt = `Extract the recipe from this YouTube video description.
@@ -283,19 +282,19 @@ Video description: ${yt.description}`;
 
       const parsed = await runExtractionPrompt(prompt);
       if (!parsed) {
-        return jsonResponse(fallbackImport("youtube", yt.title, yt.description), requestId);
+        return jsonResponse(req, fallbackImport("youtube", yt.title, yt.description), requestId);
       }
       const normalized = toImportSuccess("youtube", yt.title, parsed);
       if (!normalized.foundRecipe) {
-        return jsonResponse(fallbackImport("youtube", yt.title, yt.description), requestId);
+        return jsonResponse(req, fallbackImport("youtube", yt.title, yt.description), requestId);
       }
-      return jsonResponse(normalized, requestId);
+      return jsonResponse(req, normalized, requestId);
     }
 
     if (isTikTokUrl(url)) {
       const tk = await fetchTikTokCaption(url);
       if (!tk) {
-        return jsonResponse({ error: "TikTok video not found.", code: "NOT_FOUND" }, requestId, { status: 404 });
+        return jsonResponse(req, { error: "TikTok video not found.", code: "NOT_FOUND" }, requestId, { status: 404 });
       }
 
       const prompt = `Extract any recipe information from this TikTok caption.
@@ -315,27 +314,26 @@ Caption: ${tk.caption}`;
 
       const parsed = await runExtractionPrompt(prompt);
       if (!parsed) {
-        return jsonResponse(fallbackImport("tiktok", tk.caption, tk.caption), requestId);
+        return jsonResponse(req, fallbackImport("tiktok", tk.caption, tk.caption), requestId);
       }
       const normalized = toImportSuccess("tiktok", tk.caption, parsed);
       if (!normalized.foundRecipe) {
-        return jsonResponse(fallbackImport("tiktok", tk.caption, tk.caption), requestId);
+        return jsonResponse(req, fallbackImport("tiktok", tk.caption, tk.caption), requestId);
       }
       // Keep TikTok resilient: even if AI finds only a dish guess, we still proceed.
-      return jsonResponse({
+      return jsonResponse(req, {
         ...normalized,
         ingredients: normalized.ingredients.slice(0, 30),
         instructions: normalized.instructions.slice(0, 30),
       }, requestId);
     }
 
-    return jsonResponse(
-      { error: "Unsupported URL. Paste a TikTok or YouTube link.", code: "UNSUPPORTED_URL" },
+    return jsonResponse(req, { error: "Unsupported URL. Paste a TikTok or YouTube link.", code: "UNSUPPORTED_URL" },
       requestId,
       { status: 400 }
     );
   } catch (err) {
     console.error("[import] unhandled error:", err);
-    return jsonResponse({ error: "Internal server error", code: "INTERNAL_ERROR" }, requestId, { status: 500 });
+    return jsonResponse(req, { error: "Internal server error", code: "INTERNAL_ERROR" }, requestId, { status: 500 });
   }
 }

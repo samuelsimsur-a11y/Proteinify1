@@ -6,10 +6,13 @@ import type {
   RecipeVersion,
   TransformationMode,
 } from "@/lib/wisedish/types";
-import { useEffect, useState } from "react";
+import type { SwapIntent } from "@/lib/wisedish/clientGenerate";
+import { useState } from "react";
 import VersionCard from "./VersionCard";
 import TierLegend from "./TierLegend";
+import GenerationProgress from "./GenerationProgress";
 import { humanizeGenerateError } from "@/lib/wisedish/userFacingErrors";
+
 type VersionId = RecipeVersion["id"];
 
 type StreamingSlots = [RecipeVersion | null, RecipeVersion | null, RecipeVersion | null];
@@ -18,8 +21,10 @@ type Props = {
   response: WiseDishResponse | null;
   classification?: DishClassificationSummary | null;
   onRetryWrongDish?: () => void;
-  /** Filled progressively during full generate; null when not streaming. */
+  /** Slots shown while generating (slot 0 may fill early from the quick preview). */
   streamingVersions: StreamingSlots | null;
+  generationStartedAt: number | null;
+  isImporting?: boolean;
   resultId: string;
   dish: string;
   transformationMode: TransformationMode;
@@ -36,10 +41,14 @@ type Props = {
     actionDisabled?: boolean;
     onAction: () => void;
   } | null;
-  isInitialLoading: boolean;
   isGenerating: boolean;
   regeneratingVersionId: VersionId | null;
-  onSwapIngredient: (versionId: VersionId, ingredientId: string, replacement: string) => void;
+  swapNotes?: Partial<Record<VersionId, string>>;
+  onSwapIngredient: (
+    versionId: VersionId,
+    ingredientId: string,
+    request: { intent: SwapIntent; replacement?: string }
+  ) => void;
   onRegenerateAll: () => void;
   onRetry: () => void;
 };
@@ -49,6 +58,8 @@ export default function ResultsPreview({
   classification,
   onRetryWrongDish,
   streamingVersions,
+  generationStartedAt,
+  isImporting,
   resultId,
   dish,
   transformationMode,
@@ -59,29 +70,20 @@ export default function ResultsPreview({
   importAttribution,
   showLowConfidenceImportNotice,
   cacheNotice,
-  isInitialLoading,
   isGenerating,
   regeneratingVersionId,
+  swapNotes,
   onSwapIngredient,
   onRegenerateAll,
   onRetry,
 }: Props) {
-  const inStreamMode =
-    streamingVersions !== null && (isGenerating || isInitialLoading);
-  const showFullSkeleton =
-    ((isInitialLoading && !response) || isGenerating) && !inStreamMode;
-  const [expandedVersionId, setExpandedVersionId] = useState<VersionId | null>(null);
-
-  useEffect(() => {
-    if (response) setExpandedVersionId(null);
-  }, [response]);
-
-  useEffect(() => {
-    // Always reset to collapsed when a fresh generation starts.
-    if (isGenerating || isInitialLoading || streamingVersions) {
-      setExpandedVersionId(null);
-    }
-  }, [isGenerating, isInitialLoading, streamingVersions]);
+  const inProgress = isGenerating && streamingVersions !== null;
+  // Expanded card is remembered per result, so a new result always starts collapsed.
+  const [expanded, setExpanded] = useState<{ resultId: string; id: VersionId | null }>({ resultId, id: null });
+  const expandedVersionId = expanded.resultId === resultId ? expanded.id : null;
+  const toggleExpanded = (id: VersionId) =>
+    setExpanded({ resultId, id: expandedVersionId === id ? null : id });
+  const firstVersionReady = Boolean(streamingVersions?.[0]);
 
   return (
     <section className="px-4 pt-6">
@@ -98,14 +100,14 @@ export default function ResultsPreview({
             Results may vary.
           </div>
         ) : null}
-        {cacheNotice ? (
+        {cacheNotice && !inProgress ? (
           <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-3 py-2 text-xs transition-all duration-200">
             <span className="text-[color:var(--text-muted)]">{cacheNotice.title}</span>
             <button
               type="button"
               onClick={cacheNotice.onAction}
               disabled={cacheNotice.actionDisabled}
-              className="font-semibold text-[color:var(--accent)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-9 font-semibold text-[color:var(--accent-strong)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
             >
               {cacheNotice.actionLabel}
             </button>
@@ -152,7 +154,8 @@ export default function ResultsPreview({
             </div>
           </div>
         </div>
-        {(response || inStreamMode) && !error ? <TierLegend mode={transformationMode} /> : null}
+        {/* Hidden while generating so the progress card is visible without scrolling. */}
+        {response && !inProgress && !error ? <TierLegend mode={transformationMode} /> : null}
         <div className="mt-2 px-1 text-center text-[11px] leading-snug text-[color:var(--text-muted)]">
           Ingredients scale with serving size. Protein stays per serving.
         </div>
@@ -164,14 +167,15 @@ export default function ResultsPreview({
         ) : null}
 
         {classification?.assumed_variant &&
-        (classification.ambiguity_score === "medium" || classification.ambiguity_score === "low") ? (
+        (classification.ambiguity_score === "medium" || classification.ambiguity_score === "low") &&
+        !inProgress ? (
           <div className="mt-2 flex flex-wrap items-center gap-2 px-1 text-[11px] text-[color:var(--text-muted)]">
             <span>Interpreted as: {classification.assumed_variant}</span>
             {onRetryWrongDish ? (
               <button
                 type="button"
                 onClick={onRetryWrongDish}
-                className="font-semibold text-[color:var(--accent)] hover:underline"
+                className="font-semibold text-[color:var(--accent-strong)] hover:underline"
               >
                 Wrong dish? Retry
               </button>
@@ -180,7 +184,7 @@ export default function ResultsPreview({
         ) : null}
 
         {error ? (
-          <div className="mt-4 pf-card p-4">
+          <div className="mt-4 pf-card p-4" role="alert">
             <div className="font-display text-sm font-semibold text-[color:var(--text-primary)]">Something went wrong</div>
             <div className="mt-1 text-xs leading-relaxed text-[color:var(--text-muted)]">
               {humanizeGenerateError(error) ?? error}
@@ -188,31 +192,20 @@ export default function ResultsPreview({
             <button
               type="button"
               onClick={onRetry}
-              className="mt-3 rounded-xl bg-[color:var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:brightness-[0.97]"
+              className="mt-3 min-h-11 rounded-xl bg-[color:var(--accent)] px-4 py-2 text-xs font-semibold text-[color:var(--on-accent)] hover:brightness-[0.97]"
             >
               Try again
             </button>
           </div>
         ) : null}
 
-        {showFullSkeleton ? (
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="pf-spinner" />
-              <div className="text-xs font-semibold text-[color:var(--accent)]">Transforming your dish…</div>
-            </div>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="pf-card pf-skeleton h-[410px] rounded-[var(--radius-card)]" />
-            ))}
-          </div>
-        ) : null}
-
-        {inStreamMode ? (
+        {inProgress ? (
           <div className="mt-4 space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="pf-spinner" />
-              <div className="text-xs font-semibold text-[color:var(--accent)]">Streaming versions…</div>
-            </div>
+            <GenerationProgress
+              startedAt={generationStartedAt}
+              isImporting={isImporting}
+              firstVersionReady={firstVersionReady}
+            />
             <div className="flex flex-col overflow-hidden pf-card p-0">
               {streamingVersions!.map((v, i) =>
                 v ? (
@@ -225,9 +218,7 @@ export default function ResultsPreview({
                     resultId={resultId}
                     version={v}
                     expanded={expandedVersionId === v.id}
-                    onToggleExpand={() =>
-                      setExpandedVersionId((prev) => (prev === v.id ? null : v.id))
-                    }
+                    onToggleExpand={() => toggleExpanded(v.id)}
                     isLast={i === 2}
                     swapDisabled
                     onSwapIngredient={onSwapIngredient}
@@ -235,7 +226,8 @@ export default function ResultsPreview({
                 ) : (
                   <div
                     key={`stream-slot-${i}`}
-                    className={`pf-skeleton h-[410px] rounded-none ${i < 2 ? "border-b border-[color:var(--divider)]" : ""}`}
+                    aria-hidden
+                    className={`pf-skeleton h-[150px] rounded-none ${i < 2 ? "border-b border-[color:var(--divider)]" : ""}`}
                   />
                 )
               )}
@@ -243,18 +235,18 @@ export default function ResultsPreview({
           </div>
         ) : null}
 
-        {!showFullSkeleton && !inStreamMode && !response && !error ? (
+        {!inProgress && !response && !error ? (
           <div className="mt-4 pf-card p-4 text-xs leading-relaxed text-[color:var(--text-muted)]">
-            Results appear here. First run can take up to 30 seconds.
+            Results appear here. Tap an example to see one instantly, or type your own dish.
           </div>
         ) : null}
 
-        {!showFullSkeleton && !inStreamMode && response ? (
+        {!inProgress && response ? (
           <>
             <div className="mt-4 flex flex-col overflow-hidden pf-card p-0">
               {response.versions.map((v, i) => (
                 <VersionCard
-                  key={v.id}
+                  key={`${resultId}-${v.id}`}
                   dish={dish}
                   transformationMode={transformationMode}
                   servings={servings}
@@ -262,12 +254,12 @@ export default function ResultsPreview({
                   resultId={resultId}
                   version={v}
                   expanded={expandedVersionId === v.id}
-                  onToggleExpand={() =>
-                    setExpandedVersionId((prev) => (prev === v.id ? null : v.id))
-                  }
+                  onToggleExpand={() => toggleExpanded(v.id)}
                   isLast={i === response.versions.length - 1}
                   isRegenerating={regeneratingVersionId === v.id}
                   swapDisabled={regeneratingVersionId !== null}
+                  swapNote={swapNotes?.[v.id]}
+                  revealDelayMs={i * 180}
                   onSwapIngredient={onSwapIngredient}
                 />
               ))}
@@ -276,10 +268,8 @@ export default function ResultsPreview({
               <button
                 type="button"
                 onClick={() => onRegenerateAll()}
-                disabled={
-                  isGenerating || isInitialLoading || regeneratingVersionId !== null
-                }
-                className="rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-4 py-2.5 text-xs font-semibold text-[color:var(--text-primary)] transition hover:bg-[color:var(--accent-light)] hover:text-[color:var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isGenerating || regeneratingVersionId !== null}
+                className="min-h-11 rounded-xl border border-[color:var(--divider)] bg-[color:var(--surface-card)] px-4 py-2.5 text-xs font-semibold text-[color:var(--text-primary)] transition hover:bg-[color:var(--accent-light)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Regenerate all versions
               </button>
