@@ -11,6 +11,7 @@
   "scripts": {
     "start": "node index.js",
     "check": "node index.js --check",
+    "testers": "node index.js --testers",
     "upload": "node index.js --upload"
   },
   "engines": {

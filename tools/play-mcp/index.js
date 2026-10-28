@@ -111,6 +111,37 @@ async function listTracks() {
   });
 }
 
+/** Read-only view of who can opt in to a testing track: its groups, countries and live release. */
+async function testingSetup(track = "alpha") {
+  return withEdit(async (api, editId) => {
+    const q = { packageName: PACKAGE_NAME, editId, track };
+    const [testers, countries, trackInfo] = await Promise.all([
+      api.edits.testers.get(q).then((r) => r.data),
+      api.edits.countryavailability.get(q).then((r) => r.data),
+      api.edits.tracks.get(q).then((r) => r.data),
+    ]);
+    const groups = testers.googleGroups || [];
+    const codes = countries.countries?.map((c) => c.countryCode) || [];
+    const problems = [];
+    if (!groups.length) problems.push("No Google Group is attached to this track. Add it on the Testers tab and send the change for review.");
+    if (!countries.restOfWorld && !codes.length) problems.push("No countries are selected for this track.");
+    if (!summarizeTracks([trackInfo])[0].releases.some((r) => r.status === "completed")) {
+      problems.push("No completed release on this track, so there is nothing to opt in to.");
+    }
+    return {
+      track,
+      googleGroups: groups,
+      restOfWorld: Boolean(countries.restOfWorld),
+      countryCount: codes.length,
+      includesJapan: Boolean(countries.restOfWorld) || codes.includes("JP"),
+      countries: codes,
+      releases: summarizeTracks([trackInfo])[0].releases,
+      problems,
+      optInLink: `https://play.google.com/apps/testing/${PACKAGE_NAME}`,
+    };
+  });
+}
+
 function ok(data) {
   return { content: [{ type: "text", text: typeof data === "string" ? data : JSON.stringify(data, null, 2) }] };
 }
@@ -314,6 +345,7 @@ server.registerTool(
 );
 
 // `node index.js --check` verifies the key and permissions from a terminal without Claude.
+// `node index.js --testers [track]` shows the track's tester groups, countries and releases.
 // `node index.js --upload <internal|alpha|beta> ["release notes"]` uploads from a terminal,
 // for big AABs or slow connections where a Claude Desktop tool call may time out.
 const uploadAt = process.argv.indexOf("--upload");
@@ -324,6 +356,15 @@ if (uploadAt !== -1) {
     if (!UPLOAD_TRACKS.includes(track)) throw new Error(`Track must be one of: ${UPLOAD_TRACKS.join(", ")}`);
     console.log(`Uploading to ${track}… (this can take a few minutes)`);
     console.log(JSON.stringify(await uploadBundle({ track, status: process.env.PLAY_STATUS || "completed", release_notes: notes }), null, 2));
+    process.exit(0);
+  } catch (err) {
+    console.error(explain(err));
+    process.exit(1);
+  }
+} else if (process.argv.includes("--testers")) {
+  try {
+    const track = process.argv[process.argv.indexOf("--testers") + 1] || "alpha";
+    console.log(JSON.stringify(await testingSetup(track), null, 2));
     process.exit(0);
   } catch (err) {
     console.error(explain(err));
