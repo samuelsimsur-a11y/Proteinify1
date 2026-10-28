@@ -142,6 +142,35 @@ async function testingSetup(track = "alpha") {
   });
 }
 
+/** Attaches a Google Group to a testing track (keeping any already there) and commits the change. */
+async function addTesterGroup(group, track = "alpha") {
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(group || "")) throw new Error("Pass the group's email, e.g. wisedish-testers@googlegroups.com");
+  if (!UPLOAD_TRACKS.includes(track)) throw new Error(`Track must be one of: ${UPLOAD_TRACKS.join(", ")}`);
+  const run = (changesNotSentForReview) =>
+    withEdit(
+      async (api, editId) => {
+        const q = { packageName: PACKAGE_NAME, editId, track };
+        const { data } = await api.edits.testers.get(q);
+        const googleGroups = [...new Set([...(data.googleGroups || []), group.toLowerCase()])];
+        await api.edits.testers.update({ ...q, requestBody: { googleGroups } });
+        return googleGroups;
+      },
+      { commit: true, changesNotSentForReview }
+    );
+  try {
+    return { track, googleGroups: await run(false), sentForReview: true };
+  } catch (err) {
+    // Apps with managed publishing (or other pending changes) must be sent for review from Play Console.
+    if (!/changesNotSentForReview/i.test(explain(err))) throw err;
+    return {
+      track,
+      googleGroups: await run(true),
+      sentForReview: false,
+      nextStep: "Saved. Open Play Console → Publishing overview and click Send for review (then Publish if asked).",
+    };
+  }
+}
+
 function ok(data) {
   return { content: [{ type: "text", text: typeof data === "string" ? data : JSON.stringify(data, null, 2) }] };
 }
@@ -346,6 +375,7 @@ server.registerTool(
 
 // `node index.js --check` verifies the key and permissions from a terminal without Claude.
 // `node index.js --testers [track]` shows the track's tester groups, countries and releases.
+// `node index.js --add-group <group email> [track]` attaches a Google Group to a testing track.
 // `node index.js --upload <internal|alpha|beta> ["release notes"]` uploads from a terminal,
 // for big AABs or slow connections where a Claude Desktop tool call may time out.
 const uploadAt = process.argv.indexOf("--upload");
@@ -356,6 +386,15 @@ if (uploadAt !== -1) {
     if (!UPLOAD_TRACKS.includes(track)) throw new Error(`Track must be one of: ${UPLOAD_TRACKS.join(", ")}`);
     console.log(`Uploading to ${track}… (this can take a few minutes)`);
     console.log(JSON.stringify(await uploadBundle({ track, status: process.env.PLAY_STATUS || "completed", release_notes: notes }), null, 2));
+    process.exit(0);
+  } catch (err) {
+    console.error(explain(err));
+    process.exit(1);
+  }
+} else if (process.argv.includes("--add-group")) {
+  const at = process.argv.indexOf("--add-group");
+  try {
+    console.log(JSON.stringify(await addTesterGroup(process.argv[at + 1], process.argv[at + 2] || "alpha"), null, 2));
     process.exit(0);
   } catch (err) {
     console.error(explain(err));

@@ -99,6 +99,12 @@ To see why testers get "App not available" (which Google Groups and countries th
 PLAY_KEY_FILE=~/.secrets/play-service-account.json npm run testers
 ```
 
+If `googleGroups` comes back empty, attach the group (this sends the change for review, like saving the Testers tab):
+
+```bash
+PLAY_KEY_FILE=~/.secrets/play-service-account.json npm run add-group -- wisedish-testers@googlegroups.com
+```
+
 If a Claude upload timed out, run `npm run check` first. If the version code already shows on the track, the upload went through.
 
 ## Safety
