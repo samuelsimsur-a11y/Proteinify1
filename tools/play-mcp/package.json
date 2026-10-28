@@ -12,7 +12,6 @@
     "start": "node index.js",
     "check": "node index.js --check",
     "testers": "node index.js --testers",
-    "add-group": "node index.js --add-group",
     "upload": "node index.js --upload"
   },
   "engines": {

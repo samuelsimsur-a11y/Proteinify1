@@ -93,17 +93,13 @@ cd /Users/samuelsuresh/proteinify/tools/play-mcp
 PLAY_KEY_FILE=~/.secrets/play-service-account.json npm run upload -- alpha "Bug fixes and improvements."
 ```
 
-To see why testers get "App not available" (which Google Groups and countries the alpha track has, and whether a release is live):
+To check a testing track's countries and live release when testers get "App not available":
 
 ```bash
 PLAY_KEY_FILE=~/.secrets/play-service-account.json npm run testers
 ```
 
-If `googleGroups` comes back empty, attach the group (this sends the change for review, like saving the Testers tab):
-
-```bash
-PLAY_KEY_FILE=~/.secrets/play-service-account.json npm run add-group -- wisedish-testers@googlegroups.com
-```
+Google's API can't read or change tester lists on closed tracks managed in Play Console, so check the Testers tab there for the Google Group.
 
 If a Claude upload timed out, run `npm run check` first. If the version code already shows on the track, the upload went through.
 
